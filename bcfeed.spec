@@ -12,6 +12,7 @@ hiddenimports = (
     collect_submodules("googleapiclient")
     + collect_submodules("google.auth")
     + collect_submodules("google_auth_oauthlib")
+    + collect_submodules("tkinter")
 )
 
 a = Analysis(
