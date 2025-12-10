@@ -25,6 +25,9 @@ MULTITHREADING = True
 PROXY_PORT = 5050
 DATA_DIR = get_data_dir()
 SETTINGS_PATH = DATA_DIR / "gui_settings.json"
+CREDENTIALS_PATH = DATA_DIR / "credentials.json"
+TOKEN_PATH = DATA_DIR / "token.pickle"
+
 
 def find_free_port(preferred: int = 5050) -> int:
     import socket
@@ -53,9 +56,7 @@ def load_credentials() -> bool:
     Ensure credentials.json is present in the data directory.
     If missing and prompt_on_missing is True, ask the user to locate it.
     """
-    credentials_path = DATA_DIR / "credentials.json"
-    token_path = DATA_DIR / "token.pickle"
-    has_credentials = credentials_path.exists()
+    has_credentials = CREDENTIALS_PATH.exists()
 
     path = filedialog.askopenfilename(
         title="Load client_secret_XXXXXXXX.json",
@@ -67,10 +68,10 @@ def load_credentials() -> bool:
     if path:
         try:
             # Remove any existing credentials/token so we always replace with the selected file
-            shutil.copy(Path(path), credentials_path)
+            shutil.copy(Path(path), CREDENTIALS_PATH)
             messagebox.showinfo("Loaded", "Credentials loaded.")
-            if token_path.exists():
-                token_path.unlink()
+            if TOKEN_PATH.exists():
+                TOKEN_PATH.unlink()
             return True
         except Exception as exc:
             messagebox.showerror("Error loading credentials", str(exc))
@@ -84,7 +85,7 @@ def save_settings(settings: dict):
     tmp.replace(SETTINGS_PATH)
 
 
-def reset_credentials():
+def reload_credentials():
     load_credentials()
 
 
@@ -288,15 +289,15 @@ def main():
     from tkinter import Checkbutton  # localized import to avoid polluting top
     Checkbutton(root, text="Preload Bandcamp players (dashboard creation takes a while, but browsing is faster)", variable=preload_embeds_var).grid(row=3, column=0, columnspan=2, padx=8, sticky="w")
 
-    # Run / Reset credentials buttons
+    # Run / Reload credentials buttons
     actions_frame = Frame(root)
     actions_frame.grid(row=4, column=0, columnspan=3, padx=8, pady=6, sticky="e")
 
     run_btn = ttk.Button(actions_frame, text="Run", width=16, style="Run.TButton", command=lambda: on_run())
     run_btn.grid(row=0, column=1, padx=(10, 0), sticky="e")
 
-    reset_btn = ttk.Button(actions_frame, text="Reset credentials", width=16, style="Action.TButton", command=reset_credentials)
-    reset_btn.grid(row=1, column=1, pady=(4, 0), sticky="e")
+    reload_credentials_btn = ttk.Button(actions_frame, text="Reload credentials", width=16, style="Action.TButton", command=reload_credentials)
+    reload_credentials_btn.grid(row=1, column=1, pady=(4, 0), sticky="e")
 
     # Status box
     status_box = ScrolledText(root, width=80, height=12, state="disabled")
@@ -398,8 +399,9 @@ def main():
         finally:
             root.destroy()
 
-    # Prompt for credentials on first launch if missing
-    root.after(50, lambda: load_credentials())
+    if not CREDENTIALS_PATH.exists():
+        # Prompt for credentials on first launch if missing
+        root.after(50, lambda: load_credentials())
 
     root.protocol("WM_DELETE_WINDOW", on_close)
     root.mainloop()

@@ -18,7 +18,7 @@ from util import get_data_dir
 # ------------------------------------------------------------------------ 
 
 k_gmail_credentials_file = "credentials.json"
-
+k_client_secret_file = "client_secret_XXXXXXX.json"
 
 def _find_credentials_file() -> Path | None:
     """
@@ -93,7 +93,7 @@ def gmail_authenticate():
         else:
             cred_file = _find_credentials_file()
             if not cred_file:
-                raise FileNotFoundError(f"Could not find {k_gmail_credentials_file}. Place it in {data_dir} or alongside the app.")
+                raise FileNotFoundError(f"Could not find {k_gmail_credentials_file}. Reload credentials file to regenerate it.")
             flow = InstalledAppFlow.from_client_secrets_file(str(cred_file), SCOPES)
             creds = flow.run_local_server(port=0)
         # save the credentials for the next run
