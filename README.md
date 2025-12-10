@@ -1,8 +1,8 @@
-# bcfeed
+### bcfeed
 
-A macOS/desktop app that reads Bandcamp release emails from your Gmail, caches them locally, and generates an interactive dashboard of releases.
+A macOS/desktop app that reads Bandcamp release emails from your Gmail, caches them locally, and generates an interactive dashboard of releases that is much faster to browse than Bandcamp itself. 
 
-### 📘 Setup Guide
+## 📘 Setup Guide
 
 This application uses the Gmail API.
 To keep your data private and avoid Google’s OAuth verification requirements, **you must create your own Google Cloud OAuth client**.
@@ -10,7 +10,7 @@ This setup is required only once and takes a few minutes.
 
 ---
 
-## 1. Create a Google Cloud Project
+# 1. Create a Google Cloud Project
 
 1. Open: https://console.cloud.google.com/projectcreate  
 2. Sign in with the Gmail account you use for Bandcamp.
@@ -19,14 +19,14 @@ This setup is required only once and takes a few minutes.
 
 ---
 
-## 2. Enable the Gmail API
+# 2. Enable the Gmail API
 
 1. Go to: https://console.cloud.google.com/apis/library/gmail.googleapis.com  
 2. Click **Enable**
 
 ---
 
-## 3. Configure the OAuth Consent Screen
+# 3. Configure the OAuth Consent Screen
 
 1. Go to: https://console.cloud.google.com/auth/overview?project=bcfeed  
 2. Click **Get Started** to configure Google Auth Platform
@@ -47,7 +47,7 @@ This setup is required only once and takes a few minutes.
 
 ---
 
-## 4. Add Gmail read-only API scope
+# 4. Add Gmail read-only API scope
 
 This allows the app to read your Gmail messages.
 
@@ -62,7 +62,7 @@ This allows the app to read your Gmail messages.
 
 ---
 
-## 5. Publish the App ("In Production")
+# 5. Publish the App ("In Production")
 
 Publishing allows Google to issue long-lived refresh tokens for your personal use.
 
@@ -76,7 +76,7 @@ Since this OAuth client is used **only by you**, verification is **not required*
 
 ---
 
-## 5. Create OAuth Client Credentials (Desktop App)
+# 6. Create OAuth Client Credentials (Desktop App)
 
 1. Go to: https://console.cloud.google.com/apis/credentials  
 2. Click **Create Credentials → OAuth client ID**  
@@ -91,7 +91,7 @@ You will import this file into the application.
 
 ---
 
-## 6. Use the Credentials in This Application
+# 7. Use the Credentials in This Application
 
 1. Open this application  
 2. When prompted, select the downloaded `client_secret_XXXX.json` file  
@@ -102,7 +102,7 @@ You will import this file into the application.
 
 ---
 
-## Important small print
+# Important small print
 
 - These credentials are **for your personal use only**. Do **not** share them.  
 - The app is not a public OAuth client because **you** own and control the credentials.  
@@ -113,7 +113,7 @@ You will import this file into the application.
 
 ---
 
-## Troubleshooting
+# Troubleshooting
 
 **I see an “unverified app” warning.**  
 This is normal. Click **Continue**. The warning appears because only verified apps remove it, but personal-use apps do not require verification.
