@@ -307,7 +307,7 @@ def main():
 
     # Toggle defaults and actions
     from tkinter import Checkbutton  # localized import to avoid polluting top
-    Checkbutton(root, text="Preload BC players (fetch Bandcamp pages now)", variable=preload_embeds_var).grid(row=3, column=0, columnspan=2, padx=8, sticky="w")
+    Checkbutton(root, text="Preload Bandcamp players (dashboard creation takes a while, but browsing is faster)", variable=preload_embeds_var).grid(row=3, column=0, columnspan=2, padx=8, sticky="w")
 
     # Run / Reset credentials buttons
     actions_frame = Frame(root)
