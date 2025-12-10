@@ -6,6 +6,7 @@ A macOS/desktop app that reads Bandcamp release emails from your Gmail, caches t
 
 - Run `scripts/build_mac_app.sh` from the repo root to produce `dist/bcfeed.app` (and a zipped copy if `ditto` is available). The script creates an isolated `.venv-build`, installs `requirements-build.txt`, and invokes `pyinstaller --clean --noconfirm bcfeed.spec`.
 - Artifacts land in `dist/`; delete that folder before re-running if you want a clean output.
+- Run `xattr -r -d com.apple.quarantine dist/bcfeed.app` to clear the MacOS quarantine, otherwise loading time will be really long. 
 
 ## 📘 Setup Guide
 
