@@ -1263,6 +1263,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     const calendarEndMonth = document.getElementById("calendar-end-month");
     const populateBtn = document.getElementById("populate-range");
     const populateStatus = document.createElement("div");
+    const CALENDAR_STATE_KEY = "bc_calendar_state_v1";
     const SCRAPE_STATUS_URL = API_ROOT ? `${{API_ROOT}}/scrape-status` : null;
 
     function toggleSettings(open) {{
@@ -1626,6 +1627,30 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       }}
     }}
 
+    function loadCalendarState() {{
+      if (!dateFilterFrom || !dateFilterTo) return;
+      try {{
+        const raw = localStorage.getItem(CALENDAR_STATE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (data && typeof data === "object") {{
+          if (data.from) dateFilterFrom.value = data.from;
+          if (data.to) dateFilterTo.value = data.to;
+        }}
+      }} catch (err) {{}}
+    }}
+
+    function persistCalendarState() {{
+      if (!dateFilterFrom || !dateFilterTo) return;
+      const payload = {{
+        from: dateFilterFrom.value.trim(),
+        to: dateFilterTo.value.trim(),
+      }};
+      try {{
+        localStorage.setItem(CALENDAR_STATE_KEY, JSON.stringify(payload));
+      }} catch (err) {{}}
+    }}
+
     function setWireframeOpen(open) {{
       if (!wireframePanel || !wireframeBody || !wireframeToggle) return;
       wireframePanel.classList.toggle("open", open);
@@ -1647,12 +1672,14 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       syncCalendarsFromInputs();
       renderCalendar("start");
       renderCalendar("end");
+      persistCalendarState();
       renderTable();
     }}
     if (dateFilterFrom) dateFilterFrom.addEventListener("input", onDateFilterChange);
     if (dateFilterTo) dateFilterTo.addEventListener("input", onDateFilterChange);
 
     initializeCalendars();
+    loadCalendarState();
     setDefaultDateFilters();
     fetchScrapeStatus();
 
