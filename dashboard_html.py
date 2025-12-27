@@ -596,8 +596,8 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       <section class="wireframe-panel" id="scrape-wireframe">
         <div class="wireframe-header">
           <div class="wireframe-title" style="display:flex; align-items:center; gap:6px; white-space:nowrap;">
-            <span class="detail-meta" style="font-size:12px;">Date range:</span>
             <span id="header-range-label" class="detail-meta" style="font-size:12px; white-space:nowrap;"></span>
+            <span id="header-count-label" class="detail-meta" style="font-size:12px; white-space:nowrap;"></span>
           </div>
           <button id="scrape-wireframe-toggle" class="button" aria-expanded="false" aria-controls="scrape-wireframe-body">Expand</button>
         </div>
@@ -985,17 +985,24 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
 
     function updateRangePreview() {{}}
 
-    function updateHeaderRange() {{
-      if (!headerRangeLabel) return;
+    function updateHeaderRange(count = null) {{
       const fromVal = state.dateFilterFrom || "";
       const toVal = state.dateFilterTo || "";
-      if (!fromVal && !toVal) {{
-        headerRangeLabel.textContent = "";
-        return;
-      }}
       const start = fromVal || toVal;
       const end = toVal || fromVal;
-      headerRangeLabel.textContent = start === end ? start : `${{start}} to ${{end}}`;
+      if (headerRangeLabel) {{
+        if (!start && !end) {{
+          headerRangeLabel.textContent = "";
+        }} else if (start === end) {{
+          headerRangeLabel.textContent = `Date range: ${{start}}`;
+        }} else {{
+          headerRangeLabel.textContent = `Date range: ${{start}} to ${{end}}`;
+        }}
+      }}
+      if (headerCountLabel) {{
+        const label = count == null ? "" : `${{count}} release${{count === 1 ? "" : "s"}} shown`;
+        headerCountLabel.textContent = label;
+      }}
     }}
 
     function syncShowCheckboxAvailability() {{
@@ -1235,6 +1242,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       }});
       refreshSortIndicators();
       renderFilters(dateFiltered);
+      updateHeaderRange(sorted.length);
     }}
 
     function refreshSortIndicators() {{
@@ -1291,6 +1299,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     const populateLog = document.getElementById("populate-log");
     const CALENDAR_STATE_KEY = "bc_calendar_state_v1";
     const headerRangeLabel = document.getElementById("header-range-label");
+    const headerCountLabel = document.getElementById("header-count-label");
     const SCRAPE_STATUS_URL = API_ROOT ? `${{API_ROOT}}/scrape-status` : null;
 
     function toggleSettings(open) {{
