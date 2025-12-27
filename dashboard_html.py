@@ -1569,10 +1569,9 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       const parsedTo = parseDateString(toVal);
       calendars.range.startKey = parsedFrom ? isoKeyFromDate(parsedFrom) : null;
       calendars.range.endKey = parsedTo ? isoKeyFromDate(parsedTo) : null;
-      if (parsedFrom) {{
-        calendars.range.current = new Date(parsedFrom.getFullYear(), parsedFrom.getMonth(), 1);
-      }} else if (parsedTo) {{
-        calendars.range.current = new Date(parsedTo.getFullYear(), parsedTo.getMonth(), 1);
+      const target = parsedTo || parsedFrom;
+      if (target) {{
+        calendars.range.current = new Date(target.getFullYear(), target.getMonth(), 1);
       }}
     }}
 
