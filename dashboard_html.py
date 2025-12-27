@@ -269,7 +269,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     }}
     .calendar-row {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(2, 1fr);
       gap: 12px;
       align-items: start;
     }}
@@ -279,6 +279,11 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       background: var(--surface);
       padding: 10px;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+      width: 270px;
+      height: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }}
     .calendar-label {{
       display: flex;
@@ -309,7 +314,9 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     .calendar-month {{
       font-size: 12px;
       color: var(--muted);
-      min-width: 90px;
+      width: 120px;
+      min-width: 120px;
+      display: inline-block;
       text-align: center;
       letter-spacing: 0.4px;
       text-transform: uppercase;
@@ -329,6 +336,8 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       grid-template-columns: repeat(7, 1fr);
       gap: 4px;
       font-size: 12px;
+      flex: 1;
+      min-height: 340px;
     }}
     .calendar-day {{
       position: relative;
@@ -577,32 +586,18 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
             <div class="calendar-row">
               <div class="calendar-card">
                 <div class="calendar-label">
-                  <span>Start</span>
                   <div class="calendar-meta">
-                    <button type="button" class="calendar-today-btn" data-cal-today="start">Today</button>
+                    <button type="button" class="calendar-today-btn" data-cal-today="range">Today</button>
                     <div class="calendar-nav">
-                      <button type="button" data-cal-nav="start-prev" aria-label="Previous month">‹</button>
-                      <span class="calendar-month" id="calendar-start-month"></span>
-                      <button type="button" data-cal-nav="start-next" aria-label="Next month">›</button>
+                      <button type="button" data-cal-nav="range-prev" aria-label="Previous month">‹</button>
+                      <span class="calendar-month" id="calendar-range-month"></span>
+                      <button type="button" data-cal-nav="range-next" aria-label="Next month">›</button>
                     </div>
                   </div>
                 </div>
-                <div class="calendar-grid" id="calendar-start"></div>
+                <div class="calendar-grid" id="calendar-range"></div>
               </div>
-              <div class="calendar-card">
-                <div class="calendar-label">
-                  <span>End</span>
-                  <div class="calendar-meta">
-                    <button type="button" class="calendar-today-btn" data-cal-today="end">Today</button>
-                    <div class="calendar-nav">
-                      <button type="button" data-cal-nav="end-prev" aria-label="Previous month">‹</button>
-                      <span class="calendar-month" id="calendar-end-month"></span>
-                      <button type="button" data-cal-nav="end-next" aria-label="Next month">›</button>
-                    </div>
-                  </div>
-                </div>
-                <div class="calendar-grid" id="calendar-end"></div>
-              </div>
+              <div></div>
             </div>
             <div style="display:flex; justify-content:flex-end;">
               <button id="populate-range" class="button">Populate</button>
@@ -962,6 +957,8 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       syncShowCheckboxAvailability();
     }}
 
+    function updateRangePreview() {{}}
+
     function syncShowCheckboxAvailability() {{
       const disableShow = state.showOnlyLabels.size > 0;
       document.querySelectorAll("#label-filters .filter-item").forEach(item => {{
@@ -1257,10 +1254,8 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     const wireframePanel = document.getElementById("scrape-wireframe");
     const wireframeToggle = document.getElementById("scrape-wireframe-toggle");
     const wireframeBody = document.getElementById("scrape-wireframe-body");
-    const calendarStart = document.getElementById("calendar-start");
-    const calendarEnd = document.getElementById("calendar-end");
-    const calendarStartMonth = document.getElementById("calendar-start-month");
-    const calendarEndMonth = document.getElementById("calendar-end-month");
+    const calendarRange = document.getElementById("calendar-range");
+    const calendarRangeMonth = document.getElementById("calendar-range-month");
     const populateBtn = document.getElementById("populate-range");
     const populateStatus = document.createElement("div");
     const CALENDAR_STATE_KEY = "bc_calendar_state_v1";
@@ -1374,8 +1369,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
 
     const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const calendars = {{
-      start: {{ container: calendarStart, current: new Date(), selectedKey: null }},
-      end: {{ container: calendarEnd, current: new Date(), selectedKey: null }},
+      range: {{ container: calendarRange, current: new Date(), startKey: null, endKey: null }},
     }};
 
     function isoKeyFromDate(dateObj) {{
@@ -1403,9 +1397,9 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       const grid = cal.container;
       grid.innerHTML = "";
 
-      const monthLabel = type === "start" ? calendarStartMonth : calendarEndMonth;
+      const monthLabel = calendarRangeMonth;
       if (monthLabel) {{
-        const monthName = cal.current.toLocaleString("en-US", {{ month: "long", year: "numeric" }});
+        const monthName = cal.current.toLocaleString("en-US", {{ month: "short", year: "numeric" }});
         monthLabel.textContent = monthName;
       }}
 
@@ -1421,8 +1415,8 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       const totalCells = 42; // 6 weeks
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const startSelectedDate = calendars.start.selectedKey ? parseDateString(calendars.start.selectedKey) : null;
-      const endSelectedDate = calendars.end.selectedKey ? parseDateString(calendars.end.selectedKey) : null;
+      const startSelectedDate = cal.startKey ? parseDateString(cal.startKey) : null;
+      const endSelectedDate = cal.endKey ? parseDateString(cal.endKey) : null;
 
       for (let idx = 0; idx < totalCells; idx++) {{
         const dayNumber = idx - startOffset + 1;
@@ -1432,15 +1426,9 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         const cell = document.createElement("div");
         cell.className = "calendar-day";
         let isDisabled = cellDate > today;
-        if (type === "start" && endSelectedDate && cellDate > endSelectedDate) {{
-          isDisabled = true;
-        }}
-        if (type === "end" && startSelectedDate && cellDate < startSelectedDate) {{
-          isDisabled = true;
-        }}
         if (isOtherMonth) cell.classList.add("other-month");
         if (isDisabled) cell.classList.add("disabled");
-        if (cal.selectedKey === key) cell.classList.add("selected");
+        if (cal.startKey === key || cal.endKey === key) cell.classList.add("selected");
         if (startSelectedDate && endSelectedDate && cellDate >= startSelectedDate && cellDate <= endSelectedDate) {{
           cell.classList.add("in-range");
         }}
@@ -1457,15 +1445,24 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
 
         cell.addEventListener("click", () => {{
           if (isDisabled) return;
-          cal.selectedKey = key;
-          if (type === "start" && calendars.end.selectedKey && key > calendars.end.selectedKey) {{
-            calendars.end.selectedKey = key;
+          const startKey = cal.startKey;
+          const endKey = cal.endKey;
+          const clickedKey = key;
+          if (!startKey || (startKey && endKey)) {{
+            // Start a new selection
+            cal.startKey = clickedKey;
+            cal.endKey = null;
+          }} else if (startKey && !endKey) {{
+            const startDate = parseDateString(startKey);
+            const clickedDate = cellDate;
+            if (startDate && clickedDate < startDate) {{
+              cal.endKey = startKey;
+              cal.startKey = clickedKey;
+            }} else {{
+              cal.endKey = clickedKey;
+            }}
           }}
-          if (type === "end" && calendars.start.selectedKey && key < calendars.start.selectedKey) {{
-            calendars.start.selectedKey = key;
-          }}
-          renderCalendar("start");
-          renderCalendar("end");
+          renderCalendar("range");
           applyCalendarFiltersFromSelection();
         }});
         grid.appendChild(cell);
@@ -1489,15 +1486,12 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         .sort((a, b) => a - b);
       const today = new Date();
       if (dateValues.length) {{
-        calendars.start.current = new Date(dateValues[0].getFullYear(), dateValues[0].getMonth(), 1);
-        calendars.end.current = new Date(dateValues[dateValues.length - 1].getFullYear(), dateValues[dateValues.length - 1].getMonth(), 1);
+        calendars.range.current = new Date(dateValues[0].getFullYear(), dateValues[0].getMonth(), 1);
       }} else {{
-        calendars.start.current = new Date(today.getFullYear(), today.getMonth(), 1);
-        calendars.end.current = new Date(today.getFullYear(), today.getMonth(), 1);
+        calendars.range.current = new Date(today.getFullYear(), today.getMonth(), 1);
       }}
       syncCalendarsFromInputs();
-      renderCalendar("start");
-      renderCalendar("end");
+      renderCalendar("range");
     }}
 
     function syncCalendarsFromInputs() {{
@@ -1505,46 +1499,42 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       const toVal = dateFilterTo ? dateFilterTo.value.trim() : "";
       const parsedFrom = parseDateString(fromVal);
       const parsedTo = parseDateString(toVal);
+      calendars.range.startKey = parsedFrom ? isoKeyFromDate(parsedFrom) : null;
+      calendars.range.endKey = parsedTo ? isoKeyFromDate(parsedTo) : null;
       if (parsedFrom) {{
-        calendars.start.selectedKey = isoKeyFromDate(parsedFrom);
-        calendars.start.current = new Date(parsedFrom.getFullYear(), parsedFrom.getMonth(), 1);
-      }}
-      if (parsedTo) {{
-        calendars.end.selectedKey = isoKeyFromDate(parsedTo);
-        calendars.end.current = new Date(parsedTo.getFullYear(), parsedTo.getMonth(), 1);
+        calendars.range.current = new Date(parsedFrom.getFullYear(), parsedFrom.getMonth(), 1);
+      }} else if (parsedTo) {{
+        calendars.range.current = new Date(parsedTo.getFullYear(), parsedTo.getMonth(), 1);
       }}
     }}
 
     document.querySelectorAll("[data-cal-nav]").forEach(btn => {{
       btn.addEventListener("click", () => {{
         const role = btn.getAttribute("data-cal-nav") || "";
-        if (role.startsWith("start")) shiftCalendarMonth("start", role.endsWith("prev") ? -1 : 1);
-        if (role.startsWith("end")) shiftCalendarMonth("end", role.endsWith("prev") ? -1 : 1);
+        if (role.startsWith("range")) shiftCalendarMonth("range", role.endsWith("prev") ? -1 : 1);
       }});
     }});
 
     document.querySelectorAll("[data-cal-today]").forEach(btn => {{
       btn.addEventListener("click", () => {{
-        const target = btn.getAttribute("data-cal-today") || "";
-        const cal = calendars[target];
+        const cal = calendars.range;
         if (!cal) return;
         const today = new Date();
         const todayKey = isoKeyFromDate(today);
         cal.current = new Date(today.getFullYear(), today.getMonth(), 1);
-        cal.selectedKey = todayKey;
-        renderCalendar("start");
-        renderCalendar("end");
+        if (!cal.startKey || (cal.startKey && cal.endKey)) {{
+          cal.startKey = todayKey;
+          cal.endKey = null;
+        }} else {{
+          cal.endKey = todayKey;
+        }}
+        renderCalendar("range");
+        applyCalendarFiltersFromSelection();
       }});
     }});
 
     function populateRangeFromCalendars() {{
-      if (dateFilterFrom && calendars.start.selectedKey) {{
-        dateFilterFrom.value = calendars.start.selectedKey;
-      }}
-      if (dateFilterTo && calendars.end.selectedKey) {{
-        dateFilterTo.value = calendars.end.selectedKey;
-      }}
-      onDateFilterChange();
+      applyCalendarFiltersFromSelection();
       const startVal = dateFilterFrom ? dateFilterFrom.value.trim() : "";
       const endVal = dateFilterTo ? dateFilterTo.value.trim() : startVal;
       if (!API_ROOT || !startVal || !endVal) return;
@@ -1597,15 +1587,17 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     }}
 
     function applyCalendarFiltersFromSelection() {{
-      const fromKey = calendars.start.selectedKey;
-      const toKey = calendars.end.selectedKey || calendars.start.selectedKey;
+      const cal = calendars.range;
+      const fromKey = cal.startKey;
+      const toKey = cal.endKey || "";
       if (dateFilterFrom && fromKey) {{
         dateFilterFrom.value = fromKey;
       }}
-      if (dateFilterTo && toKey) {{
+      if (dateFilterTo) {{
         dateFilterTo.value = toKey;
       }}
       onDateFilterChange();
+      updateRangePreview();
     }}
 
     async function fetchScrapeStatus() {{
@@ -1622,8 +1614,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         scrapeStatus.scraped = new Set(data.scraped || []);
         const notScraped = data.not_scraped || data["not_scraped"] || [];
         scrapeStatus.notScraped = new Set(notScraped || []);
-        renderCalendar("start");
-        renderCalendar("end");
+        renderCalendar("range");
       }} catch (err) {{
         console.warn("Failed to load scrape status", err);
       }}
@@ -1640,6 +1631,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
           if (data.to) dateFilterTo.value = data.to;
         }}
       }} catch (err) {{}}
+      onDateFilterChange();
     }}
 
     function persistCalendarState() {{
@@ -1672,8 +1664,8 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       state.dateFilterFrom = dateFilterFrom ? dateFilterFrom.value.trim() : "";
       state.dateFilterTo = dateFilterTo ? dateFilterTo.value.trim() : "";
       syncCalendarsFromInputs();
-      renderCalendar("start");
-      renderCalendar("end");
+      renderCalendar("range");
+      updateRangePreview();
       persistCalendarState();
       renderTable();
     }}
