@@ -1032,8 +1032,12 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       closeOpenDetailRows();
 
       const filtered = releases.filter(r => {{
-        const fromVal = state.dateFilterFrom;
-        const toVal = state.dateFilterTo;
+        let fromVal = state.dateFilterFrom || "";
+        let toVal = state.dateFilterTo || "";
+        // If only one end is selected, treat it as a single-day range.
+        if (fromVal && !toVal) toVal = fromVal;
+        if (toVal && !fromVal) fromVal = toVal;
+
         const rowTs = Date.parse(r.date);
         if (fromVal) {{
           const fromTs = Date.parse(fromVal);
