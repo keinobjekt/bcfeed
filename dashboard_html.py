@@ -911,8 +911,8 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       }}
     }}
 
-    function renderFilters() {{
-      const counts = releases.reduce((acc, r) => {{
+    function renderFilters(sourceList = releases) {{
+      const counts = sourceList.reduce((acc, r) => {{
         if (!r.page_name) return acc;
         acc[r.page_name] = (acc[r.page_name] || 0) + 1;
         return acc;
@@ -1070,23 +1070,8 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       tbody.innerHTML = "";
       closeOpenDetailRows();
 
-      const filtered = releases.filter(r => {{
-        let fromVal = state.dateFilterFrom || "";
-        let toVal = state.dateFilterTo || "";
-        // If only one end is selected, treat it as a single-day range.
-        if (fromVal && !toVal) toVal = fromVal;
-        if (toVal && !fromVal) fromVal = toVal;
-
-        const rowTs = Date.parse(r.date);
-        if (fromVal) {{
-          const fromTs = Date.parse(fromVal);
-          if (!isNaN(fromTs) && !isNaN(rowTs) && rowTs < fromTs) return false;
-        }}
-        if (toVal) {{
-          const toTs = Date.parse(toVal);
-          if (!isNaN(toTs) && !isNaN(rowTs) && rowTs > toTs) return false;
-        }}
-
+      const dateFiltered = releases.filter(r => withinSelectedRange(r));
+      const filtered = dateFiltered.filter(r => {{
         const useShowOnly = state.showOnlyLabels.size > 0;
         const activeSet = useShowOnly ? state.showOnlyLabels : state.showLabels;
         if (activeSet.size > 0) {{
@@ -1249,6 +1234,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         tbody.appendChild(tr);
       }});
       refreshSortIndicators();
+      renderFilters(dateFiltered);
     }}
 
     function refreshSortIndicators() {{
@@ -1436,6 +1422,23 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       if (isNaN(parsed.getTime())) return null;
       if (parsed.getFullYear() !== y || parsed.getMonth() !== m - 1 || parsed.getDate() !== d) return null;
       return parsed;
+    }}
+
+    function withinSelectedRange(release) {{
+      let fromVal = state.dateFilterFrom || "";
+      let toVal = state.dateFilterTo || "";
+      if (fromVal && !toVal) toVal = fromVal;
+      if (toVal && !fromVal) fromVal = toVal;
+      const rowTs = Date.parse(release.date);
+      if (fromVal) {{
+        const fromTs = Date.parse(fromVal);
+        if (!isNaN(fromTs) && !isNaN(rowTs) && rowTs < fromTs) return false;
+      }}
+      if (toVal) {{
+        const toTs = Date.parse(toVal);
+        if (!isNaN(toTs) && !isNaN(rowTs) && rowTs > toTs) return false;
+      }}
+      return true;
     }}
 
     function renderCalendar(type) {{
