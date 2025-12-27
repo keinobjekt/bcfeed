@@ -95,24 +95,6 @@ def start_proxy_thread():
     server, thread = start_proxy_server(port)
     return server, thread, port
 
-
-def run_pipeline(after_date: str, before_date: str, max_results: int, proxy_port: int, preload_embeds: bool, cache_only: bool, *, log=print, launch_browser: bool = True):
-    output_path = DATA_DIR / "output.html"
-
-    releases = gather_releases_with_cache(after_date, before_date, max_results, batch_size=20, cache_only=cache_only, log=log)
-    output_file = write_release_dashboard(
-        releases=releases,
-        output_path=output_path,
-        title="bcfeed",
-        fetch_missing_ids=preload_embeds,
-        embed_proxy_url=f"http://localhost:{proxy_port}/embed-meta",
-        log=log,
-    )
-    if launch_browser:
-        webbrowser.open_new_tab(output_file.resolve().as_uri())
-    return output_file
-
-
 def launch_from_cache(proxy_port: int, preload_embeds: bool, *, log=print, launch_browser: bool = True):
     """
     Generate dashboard from all cached releases (no Gmail fetch).
@@ -411,7 +393,7 @@ def main():
                 log(f"Running query from {start_date_var.get()} to {end_date_var.get()} with max {max_results} (proxy port {proxy_port}, preload {'on' if should_preload else 'off'})")
                 
                 try:
-                    run_pipeline(start_date_var.get(), end_date_var.get(), max_results, proxy_port, should_preload, cache_only=False, log=log, launch_browser=False)
+                    gather_releases_with_cache(start_date_var.get(), end_date_var.get(), max_results, batch_size=20, cache_only=False, log=log)
                     log("Download complete; cache updated.")
                     log("")
                     root.after(0, lambda: messagebox.showinfo("Done", "Download complete; cache updated."))
