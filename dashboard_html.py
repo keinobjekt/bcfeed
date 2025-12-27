@@ -204,6 +204,174 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     main {{
       padding: 0 16px 32px 16px;
     }}
+    .wireframe-panel {{
+      margin: 16px 0;
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }}
+    .wireframe-panel.open {{
+      border-style: solid;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+    }}
+    .wireframe-header {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }}
+    .wireframe-title {{
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }}
+    .wireframe-title strong {{
+      font-size: 15px;
+      letter-spacing: 0.2px;
+    }}
+    .wireframe-title span {{
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }}
+    .wireframe-body {{
+      margin-top: 12px;
+      border: 1px dashed var(--border);
+      border-radius: calc(var(--radius) - 2px);
+      min-height: 140px;
+      background: repeating-linear-gradient(
+        45deg,
+        rgba(255,255,255,0.04),
+        rgba(255,255,255,0.04) 12px,
+        rgba(255,255,255,0.02) 12px,
+        rgba(255,255,255,0.02) 24px
+      );
+    }}
+    .date-range-panel {{
+      display: grid;
+      gap: 10px;
+    }}
+    .date-range-header {{
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+    }}
+    .date-range-header h3 {{
+      margin: 0;
+      font-size: 14px;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }}
+    .calendar-row {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      align-items: start;
+    }}
+    .calendar-card {{
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 10px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+    }}
+    .calendar-label {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }}
+    .calendar-meta {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .calendar-nav {{
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }}
+    .calendar-nav button {{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 4px 8px;
+      cursor: pointer;
+    }}
+    .calendar-month {{
+      font-size: 12px;
+      color: var(--muted);
+      min-width: 90px;
+      text-align: center;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }}
+    .calendar-today-btn {{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 12px;
+      letter-spacing: 0.3px;
+    }}
+    .calendar-grid {{
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      font-size: 12px;
+    }}
+    .calendar-day {{
+      position: relative;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      text-align: center;
+      padding: 8px 0;
+      min-height: 40px;
+      cursor: pointer;
+      background: rgba(255,255,255,0.02);
+      transition: transform 0.1s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+    }}
+    .calendar-day.in-range {{
+      background: linear-gradient(180deg, rgba(82,208,255,0.14), rgba(82,208,255,0.05));
+      border-color: rgba(82,208,255,0.5);
+    }}
+    .calendar-day:hover {{
+      transform: translateY(-1px);
+      border-color: rgba(82,208,255,0.6);
+      box-shadow: 0 6px 14px rgba(0,0,0,0.18);
+    }}
+    .calendar-day.other-month {{
+      visibility: hidden;
+      pointer-events: none;
+    }}
+    .calendar-day.disabled {{
+      opacity: 0.35;
+      cursor: not-allowed;
+      background: rgba(255,255,255,0.02);
+      border-style: dashed;
+      pointer-events: none;
+    }}
+    .calendar-day.selected {{
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(82,208,255,0.5);
+    }}
+    .calendar-weekday {{
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      padding: 4px 0;
+      letter-spacing: 0.4px;
+    }}
     .table-wrapper {{
       margin-top: 12px;
       background: var(--surface);
@@ -394,6 +562,55 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
           </div>
         </div>
       </header>
+      <section class="wireframe-panel" id="scrape-wireframe">
+        <div class="wireframe-header">
+          <div class="wireframe-title">
+            <span>Scrape controls</span>
+            <strong>Scrape by date</strong>
+          </div>
+          <button id="scrape-wireframe-toggle" class="button" aria-expanded="false" aria-controls="scrape-wireframe-body">Expand</button>
+        </div>
+        <div class="wireframe-body" id="scrape-wireframe-body" hidden>
+          <div class="date-range-panel">
+            <div class="date-range-header">
+              <h3>date range</h3>
+            </div>
+            <div class="calendar-row">
+              <div class="calendar-card">
+                <div class="calendar-label">
+                  <span>Start</span>
+                  <div class="calendar-meta">
+                    <button type="button" class="calendar-today-btn" data-cal-today="start">Today</button>
+                    <div class="calendar-nav">
+                      <button type="button" data-cal-nav="start-prev" aria-label="Previous month">‹</button>
+                      <span class="calendar-month" id="calendar-start-month"></span>
+                      <button type="button" data-cal-nav="start-next" aria-label="Next month">›</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="calendar-grid" id="calendar-start"></div>
+              </div>
+              <div class="calendar-card">
+                <div class="calendar-label">
+                  <span>End</span>
+                  <div class="calendar-meta">
+                    <button type="button" class="calendar-today-btn" data-cal-today="end">Today</button>
+                    <div class="calendar-nav">
+                      <button type="button" data-cal-nav="end-prev" aria-label="Previous month">‹</button>
+                      <span class="calendar-month" id="calendar-end-month"></span>
+                      <button type="button" data-cal-nav="end-next" aria-label="Next month">›</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="calendar-grid" id="calendar-end"></div>
+              </div>
+            </div>
+            <div style="display:flex; justify-content:flex-end;">
+              <button id="populate-range" class="button">Populate</button>
+            </div>
+          </div>
+        </div>
+      </section>
       <div class="table-wrapper">
         <table aria-label="Bandcamp releases">
           <thead>
@@ -580,6 +797,31 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       if (url.includes("/track/")) return url.split("/track/")[0];
       return url;
     }}
+
+    const HIGHLIGHT_PALETTE = ["#52d0ff", "#ff8b52", "#7cde8c", "#ff6b9f", "#c18fff", "#f2d45c", "#8fd8ff", "#ffa34f"];
+    const labelColorMap = new Map();
+    function colorForLabel(label) {{
+      const key = label || "default";
+      if (labelColorMap.has(key)) return labelColorMap.get(key);
+      const color = HIGHLIGHT_PALETTE[labelColorMap.size % HIGHLIGHT_PALETTE.length];
+      labelColorMap.set(key, color);
+      return color;
+    }}
+
+    function buildHighlightMap(items) {{
+      const map = new Map();
+      items.forEach(entry => {{
+        if (!entry.date) return;
+        const dateKey = formatDate(entry.date);
+        if (!dateKey) return;
+        const color = colorForLabel(entry.page_name || entry.artist || "");
+        if (!map.has(dateKey)) map.set(dateKey, new Set());
+        map.get(dateKey).add(color);
+      }});
+      return map;
+    }}
+
+    const highlightMap = buildHighlightMap(releases);
 
     function buildEmbedUrl(id, isTrack) {{
       if (!id) return null;
@@ -1009,6 +1251,14 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     const dateFilterFrom = document.getElementById("date-filter-from");
     const dateFilterTo = document.getElementById("date-filter-to");
     const showCachedToggle = document.getElementById("show-cached-toggle");
+    const wireframePanel = document.getElementById("scrape-wireframe");
+    const wireframeToggle = document.getElementById("scrape-wireframe-toggle");
+    const wireframeBody = document.getElementById("scrape-wireframe-body");
+    const calendarStart = document.getElementById("calendar-start");
+    const calendarEnd = document.getElementById("calendar-end");
+    const calendarStartMonth = document.getElementById("calendar-start-month");
+    const calendarEndMonth = document.getElementById("calendar-end-month");
+    const populateBtn = document.getElementById("populate-range");
 
     function toggleSettings(open) {{
       if (!settingsBackdrop) return;
@@ -1114,15 +1364,200 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       }});
     }}
 
+    const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const calendars = {{
+      start: {{ container: calendarStart, current: new Date(), selectedKey: null }},
+      end: {{ container: calendarEnd, current: new Date(), selectedKey: null }},
+    }};
+
+    function isoKeyFromDate(dateObj) {{
+      if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return "";
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+      const d = String(dateObj.getDate()).padStart(2, "0");
+      return `${{y}}-${{m}}-${{d}}`;
+    }}
+
+    function parseDateString(value) {{
+      if (!value) return null;
+      const parts = value.split("-");
+      if (parts.length !== 3) return null;
+      const [y, m, d] = parts.map(Number);
+      const parsed = new Date(y, m - 1, d);
+      if (isNaN(parsed.getTime())) return null;
+      if (parsed.getFullYear() !== y || parsed.getMonth() !== m - 1 || parsed.getDate() !== d) return null;
+      return parsed;
+    }}
+
+    function renderCalendar(type) {{
+      const cal = calendars[type];
+      if (!cal || !cal.container) return;
+      const grid = cal.container;
+      grid.innerHTML = "";
+
+      const monthLabel = type === "start" ? calendarStartMonth : calendarEndMonth;
+      if (monthLabel) {{
+        const monthName = cal.current.toLocaleString("en-US", {{ month: "long", year: "numeric" }});
+        monthLabel.textContent = monthName;
+      }}
+
+      WEEKDAYS.forEach(day => {{
+        const label = document.createElement("div");
+        label.className = "calendar-weekday";
+        label.textContent = day;
+        grid.appendChild(label);
+      }});
+
+      const monthStart = new Date(cal.current.getFullYear(), cal.current.getMonth(), 1);
+      const startOffset = monthStart.getDay();
+      const totalCells = 42; // 6 weeks
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const startSelectedDate = calendars.start.selectedKey ? parseDateString(calendars.start.selectedKey) : null;
+      const endSelectedDate = calendars.end.selectedKey ? parseDateString(calendars.end.selectedKey) : null;
+
+      for (let idx = 0; idx < totalCells; idx++) {{
+        const dayNumber = idx - startOffset + 1;
+        const cellDate = new Date(cal.current.getFullYear(), cal.current.getMonth(), dayNumber);
+        const isOtherMonth = cellDate.getMonth() !== cal.current.getMonth();
+        const key = isoKeyFromDate(cellDate);
+        const cell = document.createElement("div");
+        cell.className = "calendar-day";
+        let isDisabled = cellDate > today;
+        if (type === "start" && endSelectedDate && cellDate > endSelectedDate) {{
+          isDisabled = true;
+        }}
+        if (type === "end" && startSelectedDate && cellDate < startSelectedDate) {{
+          isDisabled = true;
+        }}
+        if (isOtherMonth) cell.classList.add("other-month");
+        if (isDisabled) cell.classList.add("disabled");
+        if (cal.selectedKey === key) cell.classList.add("selected");
+        if (startSelectedDate && endSelectedDate && cellDate >= startSelectedDate && cellDate <= endSelectedDate) {{
+          cell.classList.add("in-range");
+        }}
+        cell.textContent = String(cellDate.getDate());
+
+        cell.addEventListener("click", () => {{
+          if (isDisabled) return;
+          cal.selectedKey = key;
+          if (type === "start" && calendars.end.selectedKey && key > calendars.end.selectedKey) {{
+            calendars.end.selectedKey = key;
+          }}
+          if (type === "end" && calendars.start.selectedKey && key < calendars.start.selectedKey) {{
+            calendars.start.selectedKey = key;
+          }}
+          renderCalendar("start");
+          renderCalendar("end");
+        }});
+        grid.appendChild(cell);
+      }}
+    }}
+
+    function shiftCalendarMonth(type, delta) {{
+      const cal = calendars[type];
+      if (!cal) return;
+      const next = new Date(cal.current.getFullYear(), cal.current.getMonth() + delta, 1);
+      const now = new Date();
+      const maxMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      cal.current = next > maxMonth ? maxMonth : next;
+      renderCalendar(type);
+    }}
+
+    function initializeCalendars() {{
+      const dateValues = releases
+        .map(entry => parseDateString(entry.date))
+        .filter(Boolean)
+        .sort((a, b) => a - b);
+      const today = new Date();
+      if (dateValues.length) {{
+        calendars.start.current = new Date(dateValues[0].getFullYear(), dateValues[0].getMonth(), 1);
+        calendars.end.current = new Date(dateValues[dateValues.length - 1].getFullYear(), dateValues[dateValues.length - 1].getMonth(), 1);
+      }} else {{
+        calendars.start.current = new Date(today.getFullYear(), today.getMonth(), 1);
+        calendars.end.current = new Date(today.getFullYear(), today.getMonth(), 1);
+      }}
+      syncCalendarsFromInputs();
+      renderCalendar("start");
+      renderCalendar("end");
+    }}
+
+    function syncCalendarsFromInputs() {{
+      const fromVal = dateFilterFrom ? dateFilterFrom.value.trim() : "";
+      const toVal = dateFilterTo ? dateFilterTo.value.trim() : "";
+      const parsedFrom = parseDateString(fromVal);
+      const parsedTo = parseDateString(toVal);
+      if (parsedFrom) {{
+        calendars.start.selectedKey = isoKeyFromDate(parsedFrom);
+        calendars.start.current = new Date(parsedFrom.getFullYear(), parsedFrom.getMonth(), 1);
+      }}
+      if (parsedTo) {{
+        calendars.end.selectedKey = isoKeyFromDate(parsedTo);
+        calendars.end.current = new Date(parsedTo.getFullYear(), parsedTo.getMonth(), 1);
+      }}
+    }}
+
+    document.querySelectorAll("[data-cal-nav]").forEach(btn => {{
+      btn.addEventListener("click", () => {{
+        const role = btn.getAttribute("data-cal-nav") || "";
+        if (role.startsWith("start")) shiftCalendarMonth("start", role.endsWith("prev") ? -1 : 1);
+        if (role.startsWith("end")) shiftCalendarMonth("end", role.endsWith("prev") ? -1 : 1);
+      }});
+    }});
+
+    document.querySelectorAll("[data-cal-today]").forEach(btn => {{
+      btn.addEventListener("click", () => {{
+        const target = btn.getAttribute("data-cal-today") || "";
+        const cal = calendars[target];
+        if (!cal) return;
+        const today = new Date();
+        const todayKey = isoKeyFromDate(today);
+        cal.current = new Date(today.getFullYear(), today.getMonth(), 1);
+        cal.selectedKey = todayKey;
+        renderCalendar("start");
+        renderCalendar("end");
+      }});
+    }});
+
+    function populateRangeFromCalendars() {{
+      if (dateFilterToggle) dateFilterToggle.checked = true;
+      if (dateFilterFrom && calendars.start.selectedKey) {{
+        dateFilterFrom.value = calendars.start.selectedKey;
+      }}
+      if (dateFilterTo && calendars.end.selectedKey) {{
+        dateFilterTo.value = calendars.end.selectedKey;
+      }}
+      onDateFilterChange();
+    }}
+    if (populateBtn) populateBtn.addEventListener("click", populateRangeFromCalendars);
+
+    function setWireframeOpen(open) {{
+      if (!wireframePanel || !wireframeBody || !wireframeToggle) return;
+      wireframePanel.classList.toggle("open", open);
+      wireframeBody.hidden = !open;
+      wireframeToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      wireframeToggle.textContent = open ? "Collapse" : "Expand";
+    }}
+    if (wireframeToggle) {{
+      setWireframeOpen(false);
+      wireframeToggle.addEventListener("click", () => {{
+        const isOpen = wireframePanel && wireframePanel.classList.contains("open");
+        setWireframeOpen(!isOpen);
+      }});
+    }}
+
     function onDateFilterChange() {{
       state.dateFilterEnabled = !!(dateFilterToggle && dateFilterToggle.checked);
-      state.dateFilterFrom = (dateFilterFrom?.value || "").trim();
-      state.dateFilterTo = (dateFilterTo?.value || "").trim();
+      state.dateFilterFrom = dateFilterFrom ? dateFilterFrom.value.trim() : "";
+      state.dateFilterTo = dateFilterTo ? dateFilterTo.value.trim() : "";
+      syncCalendarsFromInputs();
       renderTable();
     }}
     if (dateFilterToggle) dateFilterToggle.addEventListener("change", onDateFilterChange);
     if (dateFilterFrom) dateFilterFrom.addEventListener("input", onDateFilterChange);
     if (dateFilterTo) dateFilterTo.addEventListener("input", onDateFilterChange);
+
+    initializeCalendars();
 
     // Render after viewed state loads to keep persisted read dots and show date range
     loadViewedSet().then(set => {{
