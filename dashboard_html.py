@@ -382,9 +382,25 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     }}
     .calendar-day.scraped {{
       background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.28);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
     }}
     body.theme-light .calendar-day.scraped {{
-      background: rgba(0,0,0,0.1);
+      background: rgba(0,0,0,0.08);
+      border-color: rgba(0,0,0,0.16);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04);
+    }}
+    .calendar-day.scraped.in-range,
+    .calendar-day.scraped.selected {{
+      background: linear-gradient(180deg, rgba(255,255,255,0.36), rgba(255,255,255,0.22));
+      border-color: rgba(82,208,255,0.7);
+      box-shadow: 0 0 0 1px rgba(82,208,255,0.4), 0 8px 18px rgba(0,0,0,0.2);
+    }}
+    body.theme-light .calendar-day.scraped.in-range,
+    body.theme-light .calendar-day.scraped.selected {{
+      background: linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.12));
+      border-color: rgba(64,150,210,0.65);
+      box-shadow: 0 0 0 1px rgba(64,150,210,0.35), 0 6px 12px rgba(0,0,0,0.1);
     }}
     .calendar-day .dot.scraped {{
       display: none;
@@ -411,8 +427,9 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       pointer-events: none;
     }}
     .calendar-day.selected {{
-      border-color: var(--accent);
-      box-shadow: 0 0 0 1px rgba(82,208,255,0.5);
+      background: linear-gradient(180deg, rgba(82,208,255,0.14), rgba(82,208,255,0.05));
+      border-color: rgba(82,208,255,0.5);
+      box-shadow: none;
     }}
     .calendar-weekday {{
       text-align: center;
