@@ -6,18 +6,16 @@ date pickers and a built-in embed proxy.
 from __future__ import annotations
 
 import argparse
-import datetime
 import threading
 import webbrowser
 import sys
 import json
 import shutil
 from pathlib import Path
-from tkinter import Tk, StringVar, IntVar, Button, Label, Entry, Frame, messagebox, filedialog, ttk
+from tkinter import Tk, Button, Frame, messagebox, filedialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
 from embed_proxy import app as proxy_app, start_proxy_server
-from pipeline import gather_releases_with_cache
 from dashboard import write_release_dashboard
 from util import get_data_dir
 from session_store import get_full_release_cache
@@ -124,120 +122,9 @@ def main():
     style.configure("Run.TButton", padding=(8, 4))
     style.configure("Action.TButton", padding=(8, 4))
 
-    today = datetime.date.today()
-    two_months_ago = today - datetime.timedelta(days=60)
     settings = load_settings()
-
-    start_date_var = StringVar(value=settings.get("start_date") or two_months_ago.strftime("%Y/%m/%d"))
-    end_date_var = StringVar(value=settings.get("end_date") or today.strftime("%Y/%m/%d"))
-
-    # Custom layout for date rows to fit compact buttons around the entry
-    date_button_sets = []
-    date_frame = Frame(root)
-    date_frame.grid(row=0, column=0, columnspan=3, padx=6, pady=4, sticky="w")
-    for col in range(1, 8):
-        date_frame.grid_columnconfigure(col, minsize=34)
-
-    def layout_date_row(label_text: str, var: StringVar, row: int, is_start: bool):
-        left_configs = [("<1m", -30), ("<1w", -7), ("<1d", -1)]
-        right_configs = [(">1d", 1), (">1w", 7), (">1m", 30)]
-
-        Label(date_frame, text=label_text).grid(row=row, column=0, padx=4, sticky="w")
-
-        def make_btn(col: int, label: str, days: int):
-            delta = datetime.timedelta(days=days)
-            btn = Button(
-                date_frame,
-                text=label,
-                width=0,  # let the text size drive width
-                padx=1,
-                pady=0,
-                font=("TkDefaultFont", 8),
-                command=lambda v=var, d=delta: adjust_date(v, is_start, d) if days !=0 else v.set(today.strftime("%Y/%m/%d")),
-            )
-            btn.grid(row=row, column=col, padx=1, pady=1, sticky="w")
-            date_button_sets.append((btn, delta, is_start))
-
-        col = 1
-        for label, days in left_configs:
-            make_btn(col, label, days)
-            col += 1
-
-        Entry(date_frame, textvariable=var, width=12).grid(row=row, column=4, padx=4, pady=2, sticky="w")
-        col = 5
-        for label, days in right_configs:
-            make_btn(col, label, days)
-            col += 1
-        if is_start:
-            btn = Button(
-                date_frame,
-                text="Same as end",
-                width=12,
-                padx=1,
-                pady=0,
-                font=("TkDefaultFont", 8),
-                command=lambda: var.set(end_date_var.get()),
-            )
-            btn.grid(row=row, column=col, padx=1, pady=1, sticky="w")
-            date_button_sets.append((btn, datetime.timedelta(days=0), is_start))
-        else:
-            btn = Button(
-                date_frame,
-                text="Same as start",
-                width=12,
-                padx=1,
-                pady=0,
-                font=("TkDefaultFont", 8),
-                command=lambda: var.set(start_date_var.get()),
-            )
-            btn.grid(row=row, column=col, padx=1, pady=1, sticky="w")
-            date_button_sets.append((btn, datetime.timedelta(days=0), is_start))
-
-    def parse_date_var(var: StringVar, fallback: datetime.date) -> datetime.date:
-        try:
-            return datetime.datetime.strptime(var.get(), "%Y/%m/%d").date()
-        except Exception:
-            return fallback
-
-    def can_adjust(is_start: bool, delta: datetime.timedelta) -> bool:
-        start_dt = parse_date_var(start_date_var, two_months_ago)
-        end_dt = parse_date_var(end_date_var, today)
-        new_start = start_dt + delta if is_start else start_dt
-        new_end = end_dt + delta if not is_start else end_dt
-        if new_start > new_end:
-            return False
-        if new_start > today or new_end > today:
-            return False
-        return True
-
-    def adjust_date(var: StringVar, is_start: bool, delta: datetime.timedelta):
-        if not can_adjust(is_start, delta):
-            return
-        current = parse_date_var(var, today if is_start else two_months_ago)
-        new_date = current + delta
-        if new_date > today:
-            new_date = today
-        var.set(new_date.strftime("%Y/%m/%d"))
-
-    layout_date_row("Start date (YYYY/MM/DD)", start_date_var, 0, True)
-    layout_date_row("End date (YYYY/MM/DD)", end_date_var, 1, False)
-
-    def parse_date_var(var: StringVar, fallback: datetime.date) -> datetime.date:
-        try:
-            return datetime.datetime.strptime(var.get(), "%Y/%m/%d").date()
-        except Exception:
-            return fallback
-
-    def can_adjust(is_start: bool, delta: datetime.timedelta) -> bool:
-        start_dt = parse_date_var(start_date_var, two_months_ago)
-        end_dt = parse_date_var(end_date_var, today)
-        new_start = start_dt + delta if is_start else start_dt
-        new_end = end_dt + delta if not is_start else end_dt
-        if new_start > new_end:
-            return False
-        if new_start > today or new_end > today:
-            return False
-        return True
+    start_date_var = None
+    end_date_var = None
 
     def adjust_date(var: StringVar, is_start: bool, delta: datetime.timedelta):
         if not can_adjust(is_start, delta):
@@ -249,24 +136,13 @@ def main():
             new_date = today
         var.set(new_date.strftime("%Y/%m/%d"))
 
-    def refresh_date_buttons(*_):
-        for btn, delta, is_start in date_button_sets:
-            btn_state = "normal" if can_adjust(is_start, delta) else "disabled"
-            btn.config(state=btn_state)
-
-    start_date_var.trace_add("write", refresh_date_buttons)
-    end_date_var.trace_add("write", refresh_date_buttons)
-    refresh_date_buttons()
-
     proxy_thread = None
     proxy_server = None
     proxy_port = PROXY_PORT
     def save_current_settings(*_args):
         save_settings(
             {
-                "start_date": start_date_var.get(),
-                "end_date": end_date_var.get(),
-                "preload_embeds": bool(preload_embeds_var.get())
+                "preload_embeds": False
             }
         )
 
@@ -275,20 +151,17 @@ def main():
 
     # Run / Reload credentials buttons
     actions_frame = Frame(root)
-    actions_frame.grid(row=4, column=0, columnspan=3, padx=8, pady=6, sticky="e")
-
-    download_btn = ttk.Button(actions_frame, text="Download", width=14, style="Action.TButton", command=lambda: on_download())
-    download_btn.grid(row=0, column=0, padx=(0, 6), sticky="e")
+    actions_frame.grid(row=0, column=0, padx=8, pady=(8, 4), sticky="e")
 
     launch_btn = ttk.Button(actions_frame, text="Launch", width=14, style="Action.TButton", command=lambda: on_launch())
-    launch_btn.grid(row=1, column=0, padx=(0, 6), pady=(4, 0), sticky="e")
+    launch_btn.grid(row=0, column=0, padx=(0, 6), sticky="e")
 
-    reload_credentials_btn = ttk.Button(actions_frame, text="Reload credentials", width=14, style="Action.TButton", command=reload_credentials)
-    reload_credentials_btn.grid(row=1, column=1, pady=(4, 0), sticky="e")
+    reload_credentials_btn = ttk.Button(actions_frame, text="Reload credentials", width=18, style="Action.TButton", command=reload_credentials)
+    reload_credentials_btn.grid(row=0, column=1, sticky="e")
 
     # Status box
     status_box = ScrolledText(root, width=80, height=12, state="disabled")
-    status_box.grid(row=5, column=0, columnspan=3, padx=8, pady=8, sticky="nsew")
+    status_box.grid(row=1, column=0, padx=8, pady=8, sticky="nsew")
 
     class GuiLogger:
         def __init__(self, callback):
@@ -324,57 +197,8 @@ def main():
             proxy_server, proxy_thread, proxy_port = start_proxy_thread()
         return proxy_port
 
-    # Persist settings whenever inputs change
-    for var in (start_date_var, end_date_var):
-        var.trace_add("write", save_current_settings)
-
-    def _validate_inputs():
-        max_results = MAX_RESULTS_HARD
-        try:
-            # validate dates
-            for val in (start_date_var.get(), end_date_var.get()):
-                datetime.datetime.strptime(val, "%Y/%m/%d")
-        except ValueError:
-            messagebox.showerror("Error", "Dates must be in YYYY/MM/DD format")
-            return None
-        return max_results
-
-    def on_download():
-        nonlocal proxy_thread, proxy_port
-        max_results = _validate_inputs()
-        if max_results is None:
-            return
-
-        should_preload = False  # no embed preloads on download-only
-        _ensure_proxy()
-
-        def worker():
-            try:
-                original_stdout = sys.stdout
-                logger = GuiLogger(log)
-                sys.stdout = logger
-                
-                log(f"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-                log(f"Starting cache refresh...")
-                log(f"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-                log(f"")
-                log(f"Running query from {start_date_var.get()} to {end_date_var.get()} with max {max_results} (proxy port {proxy_port}, preload {'on' if should_preload else 'off'})")
-                
-                try:
-                    gather_releases_with_cache(start_date_var.get(), end_date_var.get(), max_results, batch_size=20, cache_only=False, log=log)
-                    log("Download complete; cache updated.")
-                    log("")
-                    root.after(0, lambda: messagebox.showinfo("Done", "Download complete; cache updated."))
-                finally:
-                    sys.stdout = original_stdout
-            except Exception as exc:
-                log(f"Error: {exc}")
-                root.after(0, lambda exc=exc: messagebox.showerror("Error", str(exc)))
-
-        if MULTITHREADING:
-            threading.Thread(target=worker, daemon=True).start()
-        else:
-            worker()
+    # Persist settings whenever inputs change (currently only placeholder)
+    save_current_settings()
 
     def on_launch():
         nonlocal proxy_thread, proxy_port
