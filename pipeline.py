@@ -98,25 +98,16 @@ def gather_releases_with_cache(after_date: str, before_date: str, max_results: i
     else:
         log(f"Cached releases are available for {len(releases)} entries; no Gmail download needed for this range.")
 
-    cap_reached = False
-    remaining = max_results - len(releases)
-    if remaining <= 0 or cache_only:
-        # Respect the user's cap: do not download more if cache already exceeds limit
-        log(f"Maximum results of {max_results} already satisfied by cache; no Gmail download needed.")
-        cap_reached = True
-    else:
+    if not cache_only:
         service = gmail_authenticate()
 
         for start_missing, end_missing in missing_ranges:
-            if remaining <= 0:
-                log(f"Reached maximum results of {max_results}; stopping further Gmail downloads.")
-                break
             query_after = start_missing.strftime("%Y/%m/%d")
             query_before = (end_missing+datetime.timedelta(days=1)).strftime("%Y/%m/%d")
             search_query = f"from:noreply@bandcamp.com subject:'New release from' before:{query_before} after:{query_after}"
             log("")
-            log(f"Querying Gmail for {query_after} to {query_before} (remaining cap {remaining})")
-            message_ids = search_messages(service, search_query, max_results=remaining)
+            log(f"Querying Gmail for {query_after} to {query_before}...")
+            message_ids = search_messages(service, search_query)
             if not message_ids:
                 log(f"No messages found for {query_after} to {query_before}")
                 persist_empty_date_range(start_missing, end_missing, exclude_today=True)
@@ -127,7 +118,6 @@ def gather_releases_with_cache(after_date: str, before_date: str, max_results: i
             log(f"Parsed {len(new_releases)} releases from Gmail for {query_after} to {query_before}.")
             releases.extend(new_releases)
             persist_release_metadata(new_releases, exclude_today=True)
-            remaining = max_results - len(releases)
             # Mark the entire queried span as scraped so we do not re-fetch it.
             mark_date_range_scraped(start_missing, end_missing, exclude_today=True)
 
@@ -143,8 +133,8 @@ def gather_releases_with_cache(after_date: str, before_date: str, max_results: i
         deduped.append(release)
 
     log("")
-    if cap_reached:
-        log(f"Final total of {len(deduped)} unique releases (capped at {max_results} from cache).")
+    if cache_only:
+        log(f"Final total of {len(deduped)} unique releases loaded from cache).")
     else:
         log(f"Total of {len(deduped)} unique releases after combining cache and Gmail downloads.")
 

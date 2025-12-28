@@ -103,12 +103,12 @@ def gmail_authenticate():
     return build('gmail', 'v1', credentials=creds)
 
 # ------------------------------------------------------------------------ 
-def search_messages(service, query, max_results=100):
-    result = service.users().messages().list(userId='me',q=query, maxResults=max_results).execute()
+def search_messages(service, query):
+    result = service.users().messages().list(userId='me',q=query).execute()
     messages = [ ]
     if 'messages' in result:
         messages.extend(result['messages'])
-    while len(messages) < max_results and 'nextPageToken' in result:
+    while 'nextPageToken' in result:
         page_token = result['nextPageToken']
         result = service.users().messages().list(userId='me',q=query, pageToken=page_token).execute()
         if 'messages' in result:

@@ -431,6 +431,27 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       border-color: rgba(82,208,255,0.5);
       box-shadow: none;
     }}
+    .max-results-backdrop {{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }}
+    .max-results-modal {{
+      background: var(--surface);
+      color: var(--text);
+      padding: 22px 26px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: 0 24px 48px rgba(0,0,0,0.5);
+      max-width: 460px;
+      text-align: center;
+      font-size: 15px;
+      line-height: 1.5;
+    }}
     .calendar-weekday {{
       text-align: center;
       font-size: 11px;
@@ -717,14 +738,13 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         <input type="checkbox" id="show-cached-toggle" checked />
         <label for="show-cached-toggle">Show cached badges</label>
       </div>
-      <div class="settings-row" style="gap:6px;">
-        <label for="max-results-input" style="min-width:90px;">Max results</label>
-        <input id="max-results-input" type="number" min="1" max="2000" step="50" value="2000" style="width:100px; padding:6px;" />
-      </div>
     </div>
   </div>
   <div id="server-down-backdrop" class="server-down-backdrop">
     <div class="server-down-modal">Please restart the app to use bcfeed.</div>
+  </div>
+  <div id="max-results-backdrop" class="max-results-backdrop">
+    <div class="max-results-modal">Maximum number of results reached. Try again with a shorter date range.</div>
   </div>
   <script id="release-data" type="application/json">{data_json}</script>
   <script>
@@ -737,10 +757,10 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     const VIEWED_KEY = "bc_viewed_releases_v1";
     const API_ROOT = EMBED_PROXY_URL ? EMBED_PROXY_URL.replace(/\/embed-meta.*$/, "") : null;
     const serverDownBackdrop = document.getElementById("server-down-backdrop");
+    const maxResultsBackdrop = document.getElementById("max-results-backdrop");
     let serverDownShown = false;
+    let maxNoticeShown = false;
     const DEFAULT_THEME = {json.dumps(default_theme or "light")};
-    const MAX_RESULTS_KEY = "bc_max_results_v1";
-    const maxResultsInput = document.getElementById("max-results-input");
     function releaseKey(release) {{
       return release.url || [release.page_name, release.artist, release.title, release.date].filter(Boolean).join("|");
     }}
@@ -796,6 +816,23 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       if (serverDownBackdrop) {{
         serverDownBackdrop.style.display = "flex";
       }}
+    }}
+    function showMaxResultsModal() {{
+      if (maxResultsBackdrop) {{
+        maxResultsBackdrop.style.display = "flex";
+      }}
+    }}
+    function hideMaxResultsModal() {{
+      if (maxResultsBackdrop) {{
+        maxResultsBackdrop.style.display = "none";
+      }}
+    }}
+    function appendPopulateLogLine(msg) {{
+      if (!populateLog) return;
+      const current = populateLog.textContent || "";
+      const next = current ? `${{current}}\\n${{msg}}` : msg;
+      populateLog.textContent = next;
+      try {{ localStorage.setItem(POPULATE_LOG_KEY, next); }} catch (e) {{}}
     }}
     async function checkServerAlive() {{
       if (!API_ROOT || serverDownShown) return;
@@ -855,7 +892,6 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       dateFilterFrom: "",
       dateFilterTo: "",
       showCachedBadges: true,
-      maxResults: 2000,
     }};
     const THEME_KEY = "bc_dashboard_theme";
     const SHOW_CACHED_KEY = "bc_show_cached_badges";
@@ -877,23 +913,8 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         applyTheme(next);
       }});
     }}
-
-    function normalizeMaxResults(val) {{
-      const n = parseInt(val, 10);
-      if (Number.isNaN(n) || n <= 0) return 2000;
-      if (n > 2000) return 2000;
-      return n;
-    }}
-    const storedMax = normalizeMaxResults(localStorage.getItem(MAX_RESULTS_KEY));
-    state.maxResults = storedMax;
-    if (maxResultsInput) {{
-      maxResultsInput.value = storedMax;
-      maxResultsInput.addEventListener("change", () => {{
-        const next = normalizeMaxResults(maxResultsInput.value);
-        state.maxResults = next;
-        maxResultsInput.value = next;
-        localStorage.setItem(MAX_RESULTS_KEY, String(next));
-      }});
+    if (maxResultsBackdrop) {{
+      maxResultsBackdrop.addEventListener("click", hideMaxResultsModal);
     }}
 
     function formatDate(value) {{
@@ -1723,7 +1744,6 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       let endVal = dateFilterTo ? dateFilterTo.value.trim() : "";
       if (startVal && !endVal) endVal = startVal;
       if (endVal && !startVal) startVal = endVal;
-      const maxResults = normalizeMaxResults(state.maxResults);
       if (!API_ROOT || !startVal || !endVal) return;
       const btn = populateBtn;
       const original = btn ? btn.textContent : "";
@@ -1737,10 +1757,15 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         if (window.EventSource) {{
           if (populateLog) populateLog.textContent = "";
           try {{ localStorage.setItem(POPULATE_LOG_KEY, ""); }} catch (e) {{}}
-          const url = `${{API_ROOT}}/populate-range-stream?start=${{encodeURIComponent(startVal)}}&end=${{encodeURIComponent(endVal)}}&max_results=${{encodeURIComponent(maxResults)}}`;
+          const url = `${{API_ROOT}}/populate-range-stream?start=${{encodeURIComponent(startVal)}}&end=${{encodeURIComponent(endVal)}}`;
           const es = new EventSource(url);
           es.onmessage = (ev) => {{
             if (!ev || !ev.data) return;
+            if (!maxNoticeShown && ev.data.includes("Maximum results")) {{
+              maxNoticeShown = true;
+              showMaxResultsModal();
+              appendPopulateLogLine("Maximum number of results reached. Stopping download.");
+            }}
             const current = populateLog ? populateLog.textContent : "";
             const next = current ? `${{current}}\\n${{ev.data}}` : ev.data;
             if (populateLog) populateLog.textContent = next;
@@ -1767,7 +1792,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
           const resp = await fetch(`${{API_ROOT}}/populate-range`, {{
             method: "POST",
             headers: {{"Content-Type": "application/json"}},
-            body: JSON.stringify({{start: startVal, end: endVal, max_results: maxResults}}),
+            body: JSON.stringify({{start: startVal, end: endVal}}),
           }});
           const data = await resp.json().catch(() => ({{}}));
           const joinedLogs = Array.isArray(data.logs) ? data.logs.join("\\n") : "";
@@ -1785,6 +1810,11 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
           }}
           if (joinedLogs) {{
             try {{ localStorage.setItem(POPULATE_LOG_KEY, joinedLogs); }} catch (e) {{}}
+          }}
+          if (!maxNoticeShown && joinedLogs.includes("Maximum results")) {{
+            maxNoticeShown = true;
+            showMaxResultsModal();
+            appendPopulateLogLine("Maximum number of results reached. Stopping download.");
           }}
           populateStatus.textContent = "Done. Reloading…";
           window.location.reload();

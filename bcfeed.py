@@ -128,15 +128,8 @@ def main():
     two_months_ago = today - datetime.timedelta(days=60)
     settings = load_settings()
 
-    def _coerce_max(val, default):
-        try:
-            return int(val)
-        except Exception:
-            return default
-
     start_date_var = StringVar(value=settings.get("start_date") or two_months_ago.strftime("%Y/%m/%d"))
     end_date_var = StringVar(value=settings.get("end_date") or today.strftime("%Y/%m/%d"))
-    max_results_var = StringVar(value=str(_coerce_max(settings.get("max_results"), 500)))
     preload_embeds_var = IntVar(value=1 if settings.get("preload_embeds") else 0)
 
     # Custom layout for date rows to fit compact buttons around the entry
@@ -266,27 +259,14 @@ def main():
     end_date_var.trace_add("write", refresh_date_buttons)
     refresh_date_buttons()
 
-    # Align max results with date entry column
-    max_frame = Frame(root)
-    max_frame.grid(row=2, column=0, columnspan=3, padx=6, pady=6, sticky="w")
-    for col in range(1, 4):
-        max_frame.grid_columnconfigure(col, minsize=34)
-    Label(max_frame, text="Max results").grid(row=0, column=0, padx=4, sticky="w")
-    Entry(max_frame, textvariable=max_results_var, width=12).grid(row=0, column=4, padx=4, pady=2, sticky="w")
-
     proxy_thread = None
     proxy_server = None
     proxy_port = PROXY_PORT
     def save_current_settings(*_args):
-        try:
-            max_val = int(max_results_var.get())
-        except Exception:
-            max_val = None
         save_settings(
             {
                 "start_date": start_date_var.get(),
                 "end_date": end_date_var.get(),
-                "max_results": max_val if max_val is not None else "",
                 "preload_embeds": bool(preload_embeds_var.get())
             }
         )
@@ -348,20 +328,11 @@ def main():
         return proxy_port
 
     # Persist settings whenever inputs change
-    for var in (start_date_var, end_date_var):
-        var.trace_add("write", save_current_settings)
-    for var in (max_results_var, preload_embeds_var):
+    for var in (start_date_var, end_date_var, preload_embeds_var):
         var.trace_add("write", save_current_settings)
 
     def _validate_inputs():
-        try:
-            max_results = int(max_results_var.get())
-            if max_results > MAX_RESULTS_HARD:
-                messagebox.showerror("Error", f"Max results cannot exceed {MAX_RESULTS_HARD}")
-                return None
-        except ValueError:
-            messagebox.showerror("Error", "Max results must be a number")
-            return None
+        max_results = MAX_RESULTS_HARD
         try:
             # validate dates
             for val in (start_date_var.get(), end_date_var.get()):
@@ -369,7 +340,7 @@ def main():
         except ValueError:
             messagebox.showerror("Error", "Dates must be in YYYY/MM/DD format")
             return None
-        return int(max_results_var.get())
+        return max_results
 
     def on_download():
         nonlocal proxy_thread, proxy_port
