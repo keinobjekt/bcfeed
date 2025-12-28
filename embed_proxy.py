@@ -115,6 +115,18 @@ def _corsify(response):
     return response
 
 
+def _as_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "y", "on")
+    return False
+
+
 @app.route("/health", methods=["GET", "OPTIONS"])
 def health():
     if request.method == "OPTIONS":
@@ -278,6 +290,7 @@ def populate_range():
     start_raw = data.get("start") or data.get("from")
     end_raw = data.get("end") or start_raw
     max_results = int(data.get("max_results") or 2000)
+    preload_embeds = _as_bool(data.get("preload_embeds"))
     if not start_raw or not end_raw:
         return _corsify(jsonify({"error": "Missing start/end"})), 400
     start = _parse_date(start_raw)
@@ -313,7 +326,7 @@ def populate_range():
             releases=releases,
             output_path=output_path,
             title="bcfeed",
-            fetch_missing_ids=False,
+            fetch_missing_ids=preload_embeds,
             embed_proxy_url=embed_proxy_url,
             log=log,
         )
@@ -331,6 +344,7 @@ def populate_range_stream():
     start_arg = request.args.get("start") or request.args.get("from")
     end_arg = request.args.get("end") or start_arg
     max_results = int(request.args.get("max_results") or 2000)
+    preload_embeds = _as_bool(request.args.get("preload_embeds"))
     def error_stream(msg: str):
         def gen():
             yield f"event: error\ndata: {msg}\n\n"
@@ -377,7 +391,7 @@ def populate_range_stream():
                     releases=releases,
                     output_path=output_path,
                     title="bcfeed",
-                    fetch_missing_ids=False,
+                    fetch_missing_ids=preload_embeds,
                     embed_proxy_url=embed_proxy_url,
                     log=log,
                 )

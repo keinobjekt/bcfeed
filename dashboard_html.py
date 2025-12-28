@@ -727,6 +727,10 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         <input type="checkbox" id="show-cached-toggle" checked />
         <label for="show-cached-toggle">Show cached badges</label>
       </div>
+      <div class="settings-row">
+        <input type="checkbox" id="preload-embeds-toggle" />
+        <label for="preload-embeds-toggle">Preload Bandcamp players (faster browsing, slower generation)</label>
+      </div>
     </div>
   </div>
   <div id="server-down-backdrop" class="server-down-backdrop">
@@ -748,9 +752,11 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     const HEALTH_URL = API_ROOT ? `${{API_ROOT}}/health` : null;
     const serverDownBackdrop = document.getElementById("server-down-backdrop");
     const maxResultsBackdrop = document.getElementById("max-results-backdrop");
+    const preloadEmbedsToggle = document.getElementById("preload-embeds-toggle");
     let serverDownShown = false;
     let maxNoticeShown = false;
     const DEFAULT_THEME = {json.dumps(default_theme or "light")};
+    const PRELOAD_KEY = "bc_preload_embeds_v1";
     function releaseKey(release) {{
       return release.url || [release.page_name, release.artist, release.title, release.date].filter(Boolean).join("|");
     }}
@@ -882,6 +888,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       dateFilterFrom: "",
       dateFilterTo: "",
       showCachedBadges: true,
+      preloadEmbeds: false,
     }};
     const THEME_KEY = "bc_dashboard_theme";
     const SHOW_CACHED_KEY = "bc_show_cached_badges";
@@ -905,6 +912,15 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     }}
     if (maxResultsBackdrop) {{
       maxResultsBackdrop.addEventListener("click", hideMaxResultsModal);
+    }}
+    if (preloadEmbedsToggle) {{
+      const stored = localStorage.getItem(PRELOAD_KEY);
+      state.preloadEmbeds = stored === null ? false : stored === "true";
+      preloadEmbedsToggle.checked = state.preloadEmbeds;
+      preloadEmbedsToggle.addEventListener("change", () => {{
+        state.preloadEmbeds = !!preloadEmbedsToggle.checked;
+        try {{ localStorage.setItem(PRELOAD_KEY, String(state.preloadEmbeds)); }} catch (e) {{}}
+      }});
     }}
 
     function formatDate(value) {{
@@ -1725,6 +1741,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       let endVal = dateFilterTo ? dateFilterTo.value.trim() : "";
       if (startVal && !endVal) endVal = startVal;
       if (endVal && !startVal) startVal = endVal;
+      const preloadEmbeds = !!(preloadEmbedsToggle && preloadEmbedsToggle.checked);
       if (!API_ROOT || !startVal || !endVal) return;
       const btn = populateBtn;
       const original = btn ? btn.textContent : "";
@@ -1738,7 +1755,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         if (window.EventSource) {{
           if (populateLog) populateLog.textContent = "";
           try {{ localStorage.setItem(POPULATE_LOG_KEY, ""); }} catch (e) {{}}
-          const url = `${{API_ROOT}}/populate-range-stream?start=${{encodeURIComponent(startVal)}}&end=${{encodeURIComponent(endVal)}}`;
+          const url = `${{API_ROOT}}/populate-range-stream?start=${{encodeURIComponent(startVal)}}&end=${{encodeURIComponent(endVal)}}&preload_embeds=${{preloadEmbeds ? "true" : "false"}}`;
           const es = new EventSource(url);
           es.onmessage = (ev) => {{
             if (!ev || !ev.data) return;
@@ -1773,7 +1790,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
           const resp = await fetch(`${{API_ROOT}}/populate-range`, {{
             method: "POST",
             headers: {{"Content-Type": "application/json"}},
-            body: JSON.stringify({{start: startVal, end: endVal}}),
+            body: JSON.stringify({{start: startVal, end: endVal, preload_embeds: preloadEmbeds}}),
           }});
           const data = await resp.json().catch(() => ({{}}));
           const joinedLogs = Array.isArray(data.logs) ? data.logs.join("\\n") : "";

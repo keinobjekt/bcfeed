@@ -130,7 +130,6 @@ def main():
 
     start_date_var = StringVar(value=settings.get("start_date") or two_months_ago.strftime("%Y/%m/%d"))
     end_date_var = StringVar(value=settings.get("end_date") or today.strftime("%Y/%m/%d"))
-    preload_embeds_var = IntVar(value=1 if settings.get("preload_embeds") else 0)
 
     # Custom layout for date rows to fit compact buttons around the entry
     date_button_sets = []
@@ -272,9 +271,7 @@ def main():
         )
 
     # Toggle defaults and actions
-    from tkinter import Checkbutton  # localized import to avoid polluting top
-    Checkbutton(root, text="Preload Bandcamp players (dashboard creation takes a while, but browsing is faster)", variable=preload_embeds_var).grid(row=3, column=0, columnspan=2, padx=8, sticky="w")
-
+    # (Preload Bandcamp players option moved to browser UI)
 
     # Run / Reload credentials buttons
     actions_frame = Frame(root)
@@ -328,7 +325,7 @@ def main():
         return proxy_port
 
     # Persist settings whenever inputs change
-    for var in (start_date_var, end_date_var, preload_embeds_var):
+    for var in (start_date_var, end_date_var):
         var.trace_add("write", save_current_settings)
 
     def _validate_inputs():
@@ -381,7 +378,7 @@ def main():
 
     def on_launch():
         nonlocal proxy_thread, proxy_port
-        should_preload = bool(preload_embeds_var.get())
+        should_preload = False  # browser UI controls preload behaviour for embeds
         _ensure_proxy()
 
         def worker():
