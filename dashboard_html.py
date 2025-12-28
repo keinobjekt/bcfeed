@@ -646,8 +646,8 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
               <input type="checkbox" id="hide-viewed-toggle" />
               <span>Hide already seen releases</span>
             </label>
-            <button id="mark-seen" class="button" style="padding:6px 10px; font-size:12px;">Mark all as seen</button>
-            <button id="mark-unseen" class="button" style="padding:6px 10px; font-size:12px;">Mark all as unseen</button>
+            <button id="mark-seen" class="button" style="padding:6px 10px; font-size:12px;">Mark filtered as viewed</button>
+            <button id="mark-unseen" class="button" style="padding:6px 10px; font-size:12px;">Mark filtered as unviewed</button>
             <button id="settings-btn" class="button">Settings</button>
           </div>
         </div>
@@ -1490,18 +1490,18 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       hideViewedToggle.addEventListener("change", () => applyHideViewed(hideViewedToggle.checked));
     }}
 
-    function markVisibleRows(seen) {{
+    function markVisibleRows(viewed) {{
       const rows = Array.from(document.querySelectorAll("#release-rows tr.data-row"));
       rows.forEach(row => {{
         const key = row.dataset.key;
         const release = key ? releaseMap.get(key) : null;
         if (!release) return;
-        setViewed(release, seen);
+        setViewed(release, viewed);
         const dot = row.querySelector(".row-dot");
         if (dot) {{
-          dot.classList.toggle("read", seen);
+          dot.classList.toggle("read", viewed);
         }}
-        row.classList.toggle("unseen", !seen);
+        row.classList.toggle("unseen", !viewed);
       }});
       if (state.hideViewed) {{
         state.hideViewedSnapshot = new Set(state.viewed);
