@@ -717,8 +717,6 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         <h2>Settings</h2>
         <button id="settings-close" class="button">Close</button>
       </div>
-      <button id="settings-reset" class="button">Clear cache</button>
-      <div style="height:8px;"></div>
       <div class="settings-row">
         <input type="checkbox" id="theme-toggle" />
         <label for="theme-toggle">Dark mode</label>
@@ -730,6 +728,10 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       <div class="settings-row">
         <input type="checkbox" id="preload-embeds-toggle" />
         <label for="preload-embeds-toggle">Preload Bandcamp players (faster browsing, slower generation)</label>
+      </div>
+      <div style="height:12px;"></div>
+      <div style="display:flex; justify-content:flex-start;">
+        <button id="settings-reset" class="button" style="width:auto; padding:6px 10px;">Clear cache</button>
       </div>
     </div>
   </div>
