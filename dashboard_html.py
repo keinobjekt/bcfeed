@@ -543,6 +543,25 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       gap: 12px;
       background: var(--surface);
     }}
+    .detail-body {{
+      display: grid;
+      grid-template-columns: minmax(260px, 520px) 1fr;
+      gap: 16px;
+      align-items: stretch;
+    }}
+    .detail-desc {{
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--muted);
+      white-space: pre-wrap;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.02);
+      max-height: 480px;
+      min-height: 320px;
+      overflow: auto;
+    }}
     .detail-header {{
       display: flex;
       justify-content: space-between;
@@ -995,36 +1014,75 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       }}
     }}
 
+    function parseDescriptionFromHtml(htmlText) {{
+      try {{
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlText, "text/html");
+        const about = doc.querySelector("#tralbum-about, .tralbum-about");
+        const credits = doc.querySelector(".tralbum-credits, #tralbum-credits");
+        const parts = [];
+        const collect = (el) => {{
+          if (!el) return "";
+          const txt = (el.textContent || "").replace(/\\r\\n/g, "\\n");
+          const lines = txt.split("\\n").map(t => t.trim());
+          const joined = lines.join("\\n").replace(/\\n{3,}/g, "\\n\\n");
+          return joined.trim();
+        }};
+        const aboutText = collect(about);
+        const creditsText = collect(credits);
+        if (aboutText) parts.push(aboutText);
+        if (creditsText) parts.push(creditsText);
+        if (parts.length) return parts.join("\\n\\n");
+        const og = doc.querySelector('meta[property="og:description"]');
+        if (og && og.content) return og.content.trim();
+        const desc = doc.querySelector('meta[name="description"]');
+        if (desc && desc.content) return desc.content.trim();
+      }} catch (err) {{
+        return null;
+      }}
+      return null;
+    }}
+
     async function ensureEmbed(release) {{
-      if (release.embed_url) {{
+      if (release.embed_url && release.description) {{
         return release.embed_url;
       }}
       if (!release.url) return null;
+
+      const applyEmbedData = (data) => {{
+        if (!data) return null;
+        const embedUrl = data.embed_url || buildEmbedUrl(data.release_id, data.is_track);
+        if (embedUrl) release.embed_url = embedUrl;
+        if (data.release_id) release.release_id = data.release_id;
+        if (typeof data.is_track === "boolean") {{
+          release.is_track = data.is_track;
+        }}
+        if (data.description) {{
+          release.description = data.description;
+        }}
+        return embedUrl;
+      }};
 
       const tryDirect = async () => {{
         const response = await fetch(release.url, {{ method: "GET" }});
         const text = await response.text();
         const meta = parseEmbedMeta(text);
-        if (!meta) return null;
-        const embedUrl = buildEmbedUrl(meta.item_id, meta.item_type === "track");
-        release.embed_url = embedUrl;
-        if (meta.item_id) release.release_id = meta.item_id;
-        release.is_track = meta.item_type === "track";
+        const embedUrl = meta ? buildEmbedUrl(meta.item_id, meta.item_type === "track") : null;
+        if (embedUrl) release.embed_url = embedUrl;
+        if (meta && meta.item_id) release.release_id = meta.item_id;
+        if (meta) release.is_track = meta.item_type === "track";
+        const desc = parseDescriptionFromHtml(text);
+        if (desc) release.description = desc;
         return embedUrl;
       }};
 
       try {{
-        if (EMBED_PROXY_URL) {{
+        if (EMBED_PROXY_URL && (!release.embed_url || !release.description)) {{
           try {{
             const response = await fetch(`${{EMBED_PROXY_URL}}?url=${{encodeURIComponent(release.url)}}`);
             if (!response.ok) throw new Error(`Proxy fetch failed: ${{response.status}}`);
             const data = await response.json();
-            const embedUrl = data.embed_url || buildEmbedUrl(data.release_id, data.is_track);
-            release.embed_url = embedUrl;
-            if (data.release_id) release.release_id = data.release_id;
-            if (typeof data.is_track === "boolean") {{
-              release.is_track = data.is_track;
-            }}
+            const embedUrl = applyEmbedData(data);
             if (embedUrl) return embedUrl;
           }} catch (proxyErr) {{
             console.warn("Proxy embed fetch failed, falling back to direct fetch", proxyErr);
@@ -1181,8 +1239,11 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
 
       td.innerHTML = `
         <div class="detail-card">
-          <div class="embed-wrapper" data-embed-target>
-            <div class="detail-meta">Loading player…</div>
+          <div class="detail-body">
+            <div class="embed-wrapper" data-embed-target>
+              <div class="detail-meta">Loading player…</div>
+            </div>
+            <div class="detail-desc" data-desc-target>Loading description…</div>
           </div>
         </div>`;
       tr.appendChild(td);
@@ -1269,6 +1330,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
           state.expandedKey = releaseKey(release);
 
           const embedTarget = detail.querySelector("[data-embed-target]");
+          const descTarget = detail.querySelector("[data-desc-target]");
           const dot = tr.querySelector(".row-dot");
           if (dot) dot.classList.add("read");
           tr.classList.remove("unseen");
@@ -1277,6 +1339,9 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
             state.viewed.add(cachedUrl);
           }}
           setViewed(release, true);
+          if (descTarget) {{
+            descTarget.textContent = release.description || "Loading description…";
+          }}
           ensureEmbed(release).then(embedUrl => {{
               if (!embedUrl) {{
                 embedTarget.innerHTML = `<div class="detail-meta">No embed available. Is the app still running? <br><a class="link" href="${{release.url || "#"}}" target="_blank" rel="noopener">Open on Bandcamp</a>.</div>`;
@@ -1287,6 +1352,9 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
             const titleCell = tr.children[3];
             if (titleCell && embedUrl && state.showCachedBadges && !titleCell.querySelector(".cached-badge")) {{
               titleCell.insertAdjacentHTML("beforeend", ' <span class="cached-badge">cached</span>');
+            }}
+            if (descTarget) {{
+              descTarget.textContent = release.description || "No description available.";
             }}
           }});
         }});

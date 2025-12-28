@@ -13,6 +13,7 @@ import ast
 import datetime
 import json
 import os
+import re
 import threading
 from pathlib import Path
 from typing import Optional
@@ -57,7 +58,7 @@ def _save_embed_cache(cache: dict) -> None:
     tmp.replace(EMBED_CACHE_PATH)
 
 
-def _persist_embed_meta(url: str, *, release_id=None, is_track=None, embed_url=None) -> None:
+def _persist_embed_meta(url: str, *, release_id=None, is_track=None, embed_url=None, description=None) -> None:
     if not url:
         return
     cache = _load_embed_cache()
@@ -66,6 +67,7 @@ def _persist_embed_meta(url: str, *, release_id=None, is_track=None, embed_url=N
         "release_id": existing.get("release_id"),
         "is_track": existing.get("is_track"),
         "embed_url": existing.get("embed_url"),
+        "description": existing.get("description"),
     }
     if release_id is not None:
         merged["release_id"] = release_id
@@ -73,6 +75,8 @@ def _persist_embed_meta(url: str, *, release_id=None, is_track=None, embed_url=N
         merged["is_track"] = is_track
     if embed_url is not None:
         merged["embed_url"] = embed_url
+    if description is not None:
+        merged["description"] = description
     cache[url] = merged
     _save_embed_cache(cache)
 
@@ -96,6 +100,41 @@ def _save_viewed(items: set[str]) -> None:
     except FileNotFoundError:
         # If the temp file vanished between write and replace, fall back to writing directly.
         VIEWED_PATH.write_text(json.dumps(sorted(items)), encoding="utf-8")
+
+
+def _extract_description(html_text: str) -> str | None:
+    if not html_text:
+        return None
+    try:
+        soup = BeautifulSoup(html_text, "html.parser")
+        def _collect(el):
+            if not el:
+                return ""
+            text = el.get_text("\n")
+            text = text.replace("\r\n", "\n")
+            lines = [ln.strip() for ln in text.split("\n")]
+            text = "\n".join(lines)
+            return re.sub(r"\n{3,}", "\n\n", text).strip("\n")
+
+        about = soup.find(id="tralbum-about") or soup.find("div", class_="tralbum-about")
+        credits = soup.find(class_="tralbum-credits") or soup.find(id="tralbum-credits")
+
+        parts = []
+        about_text = _collect(about)
+        credits_text = _collect(credits)
+        if about_text:
+            parts.append(about_text)
+        if credits_text:
+            parts.append(f"{credits_text}")
+        if parts:
+            return "\n\n".join(parts)
+
+        meta = soup.find("meta", attrs={"property": "og:description"}) or soup.find("meta", attrs={"name": "description"})
+        if meta and meta.get("content"):
+            return meta["content"].strip()
+    except Exception:
+        return None
+    return None
 
 
 def _parse_date(val: str) -> datetime.date | None:
@@ -201,7 +240,9 @@ def embed_meta():
     except Exception as exc:
         return _corsify(jsonify({"error": f"Failed to fetch Bandcamp page: {exc}"})), 502
 
-    data = extract_bc_meta(resp.text)
+    html_text = resp.text
+    data = extract_bc_meta(html_text)
+    description = _extract_description(html_text)
     if not data:
         return _corsify(jsonify({"error": "Unable to find bc-page-properties meta"})), 404
 
@@ -210,10 +251,10 @@ def embed_meta():
     embed_url = build_embed_url(item_id, is_track)
 
     # Persist embed metadata for future sessions.
-    _persist_embed_meta(release_url, release_id=item_id, is_track=is_track, embed_url=embed_url)
+    _persist_embed_meta(release_url, release_id=item_id, is_track=is_track, embed_url=embed_url, description=description)
 
     response = jsonify(
-        {"release_id": item_id, "is_track": is_track, "embed_url": embed_url}
+        {"release_id": item_id, "is_track": is_track, "embed_url": embed_url, "description": description}
     )
     return _corsify(response)
 
