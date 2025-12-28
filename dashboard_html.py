@@ -683,9 +683,11 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
                 <div id="populate-log" class="scrollbox"></div>
               </div>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <button id="select-month-btn" class="button" style="background:var(--panel); border:1px solid var(--border); color:var(--text);">Select this month</button>
-              <button id="populate-range" class="button">Populate</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+              <div style="display:flex; gap:8px; align-items:center;">
+                <button id="select-month-btn" class="button" style="background:var(--panel); border:1px solid var(--border); color:var(--text);">Select this month</button>
+                <button id="populate-range" class="button" style="background:#b83a3a; border-color:#b83a3a;">Download</button>
+              </div>
             </div>
             <div style="display:none;">
               <input type="text" id="date-filter-from" />
