@@ -1541,6 +1541,11 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         delete r.is_track;
       }});
       renderTable();
+      if (populateLog) {{
+        const msg = "Cache has been reset.";
+        populateLog.textContent = msg;
+        try {{ localStorage.setItem(POPULATE_LOG_KEY, msg); }} catch (e) {{}}
+      }}
       toggleSettings(false);
       if (hadError && clearCache) {{
         alert("Could not clear disk cache (proxy not reachable). Run the app/proxy and try again.");
