@@ -22,7 +22,7 @@ import requests
 from bs4 import BeautifulSoup
 from flask import Flask, jsonify, request, Response, stream_with_context
 from queue import SimpleQueue
-from werkzeug.serving import make_server
+from werkzeug.serving import make_server, WSGIRequestHandler
 
 from util import get_data_dir
 from session_store import scrape_status_for_range, get_full_release_cache
@@ -173,10 +173,17 @@ def health():
         return _corsify(app.response_class(status=204))
     return _corsify(jsonify({"ok": True}))
 
+# Suppress noisy logging for health checks
+class QuietHealthHandler(WSGIRequestHandler):
+    def log_request(self, code="-", size="-"):
+        if getattr(self, "path", "") == "/health":
+            return
+        super().log_request(code, size)
+
 
 def start_proxy_server(port: int = 5050):
     """Start the proxy in a background thread and return (server, thread)."""
-    server = make_server("0.0.0.0", port, app, threaded=True)
+    server = make_server("0.0.0.0", port, app, threaded=True, request_handler=QuietHealthHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server, thread
