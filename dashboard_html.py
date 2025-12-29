@@ -825,6 +825,13 @@ def render_dashboard_html(
       <div style="display:flex; justify-content:flex-start;">
         <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" class="button" style="background:#b83a3a; border-color:#b83a3a; color:#fff; padding:6px 10px; font-size:12px;">Revoke Gmail access</a>
       </div>
+      <div style="display:flex; justify-content:flex-start;">
+        <button id="clear-creds-btn" class="button" style="padding:6px 10px;">Clear credentials</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <input type="file" id="load-creds-file" accept="application/json" style="font-size:12px; max-width:220px;" />
+        <button id="load-creds-btn" class="button" style="padding:6px 10px;">Load credentials</button>
+      </div>
     </div>
   </div>
   <div id="server-down-backdrop" class="server-down-backdrop">
@@ -844,6 +851,8 @@ def render_dashboard_html(
     const VIEWED_KEY = "bc_viewed_releases_v1";
     const API_ROOT = EMBED_PROXY_URL ? EMBED_PROXY_URL.replace(/\/embed-meta.*$/, "") : null;
     const HEALTH_URL = API_ROOT ? `${{API_ROOT}}/health` : null;
+    const CLEAR_CREDS_URL = API_ROOT ? `${{API_ROOT}}/clear-credentials` : null;
+    const LOAD_CREDS_URL = API_ROOT ? `${{API_ROOT}}/load-credentials` : null;
     const POPULATE_LOG_KEY = "bc_populate_log_v1";
     const CLEAR_STATUS_ON_LOAD = {clear_status_literal};
     const SHOW_DEV_SETTINGS = {"true" if show_dev_settings else "false"};
@@ -855,6 +864,9 @@ def render_dashboard_html(
     const DEFAULT_THEME = {json.dumps(default_theme or "light")};
     const PRELOAD_KEY = "bc_preload_embeds_v1";
     const populateLog = document.getElementById("populate-log");
+    const clearCredsBtn = document.getElementById("clear-creds-btn");
+    const loadCredsBtn = document.getElementById("load-creds-btn");
+    const loadCredsFile = document.getElementById("load-creds-file");
     let clearedLogOnInit = false;
     function applyDevSettingsVisibility() {{
       const devEls = document.querySelectorAll(".dev-setting");
@@ -1040,6 +1052,85 @@ def render_dashboard_html(
       try {{ localStorage.setItem(SHOW_CACHED_KEY, "false"); }} catch (e) {{}}
       const cachedToggle = document.getElementById("show-cached-toggle");
       if (cachedToggle) cachedToggle.checked = false;
+    }}
+    if (clearCredsBtn && CLEAR_CREDS_URL) {{
+      clearCredsBtn.addEventListener("click", async () => {{
+        clearCredsBtn.disabled = true;
+        const original = clearCredsBtn.textContent;
+        clearCredsBtn.textContent = "Clearing…";
+        try {{
+          const resp = await fetch(CLEAR_CREDS_URL, {{ method: "POST" }});
+          const data = await resp.json().catch(() => ({{}}));
+          const joinedLogs = Array.isArray(data.logs) ? data.logs.join("\\n") : "";
+          if (!resp.ok) {{
+            const msg = data.error || "Failed to clear credentials.";
+            const next = joinedLogs ? `${{msg}}\\n${{joinedLogs}}` : msg;
+            if (populateLog) populateLog.textContent = next;
+            try {{ localStorage.setItem(POPULATE_LOG_KEY, next); }} catch (e) {{}}
+            alert(msg);
+          }} else {{
+            const msg = joinedLogs || "Credentials reloaded.";
+            if (populateLog) populateLog.textContent = msg;
+            try {{ localStorage.setItem(POPULATE_LOG_KEY, msg); }} catch (e) {{}}
+          }}
+        }} catch (err) {{
+          const msg = String(err || "Failed to load credentials.");
+          if (populateLog) populateLog.textContent = msg;
+          try {{ localStorage.setItem(POPULATE_LOG_KEY, msg); }} catch (e) {{}}
+          alert(msg);
+        }} finally {{
+          clearCredsBtn.disabled = false;
+          clearCredsBtn.textContent = original || "Clear credentials";
+        }}
+      }});
+    }}
+    if (loadCredsBtn && loadCredsFile && LOAD_CREDS_URL) {{
+      const doLoadCreds = async () => {{
+        const file = loadCredsFile.files && loadCredsFile.files[0];
+        if (!file) {{
+          alert("Choose a credentials JSON file first.");
+          return;
+        }}
+        loadCredsBtn.disabled = true;
+        const original = loadCredsBtn.textContent;
+        loadCredsBtn.textContent = "Loading…";
+        try {{
+          const form = new FormData();
+          form.append("file", file, file.name);
+          const resp = await fetch(LOAD_CREDS_URL, {{
+            method: "POST",
+            body: form,
+          }});
+          const data = await resp.json().catch(() => ({{}}));
+          const joinedLogs = Array.isArray(data.logs) ? data.logs.join("\\n") : "";
+          if (!resp.ok) {{
+            const msg = data.error || "Failed to load credentials.";
+            const next = joinedLogs ? `${{msg}}\\n${{joinedLogs}}` : msg;
+            if (populateLog) populateLog.textContent = next;
+            try {{ localStorage.setItem(POPULATE_LOG_KEY, next); }} catch (e) {{}}
+            alert(msg);
+          }} else {{
+            const msg = joinedLogs || "Credentials loaded and authenticated.";
+            if (populateLog) populateLog.textContent = msg;
+            try {{ localStorage.setItem(POPULATE_LOG_KEY, msg); }} catch (e) {{}}
+            alert("Credentials loaded.");
+          }}
+        }} catch (err) {{
+          const msg = String(err || "Failed to load credentials.");
+          if (populateLog) populateLog.textContent = msg;
+          try {{ localStorage.setItem(POPULATE_LOG_KEY, msg); }} catch (e) {{}}
+          alert(msg);
+        }} finally {{
+          loadCredsBtn.disabled = false;
+          loadCredsBtn.textContent = original || "Load credentials";
+        }}
+      }};
+      loadCredsBtn.addEventListener("click", doLoadCreds);
+      loadCredsFile.addEventListener("change", () => {{
+        if (loadCredsFile.files && loadCredsFile.files[0]) {{
+          doLoadCreds();
+        }}
+      }});
     }}
     if (maxResultsBackdrop) {{
       maxResultsBackdrop.addEventListener("click", hideMaxResultsModal);

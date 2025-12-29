@@ -28,7 +28,7 @@ from util import get_data_dir
 from session_store import scrape_status_for_range, get_full_release_cache
 from pipeline import gather_releases_with_cache
 from dashboard import write_release_dashboard
-from gmail import _find_credentials_file, GmailAuthError
+from gmail import _find_credentials_file, GmailAuthError, gmail_authenticate
 
 app = Flask(__name__)
 
@@ -39,6 +39,7 @@ EMPTY_DATES_PATH = DATA_DIR / "no_results_dates.json"
 SCRAPE_STATUS_PATH = DATA_DIR / "scrape_status.json"
 EMBED_CACHE_PATH = DATA_DIR / "embed_cache.json"
 TOKEN_PATH = DATA_DIR / "token.pickle"
+CREDENTIALS_PATH = DATA_DIR / "credentials.json"
 POPULATE_LOCK = threading.Lock()
 
 
@@ -380,6 +381,59 @@ def populate_range():
         return _corsify(jsonify({"error": str(exc), "logs": logs})), 500
     finally:
         POPULATE_LOCK.release()
+
+
+@app.route("/clear-credentials", methods=["POST", "OPTIONS"])
+def clear_credentials():
+    if request.method == "OPTIONS":
+        return _corsify(app.response_class(status=204))
+    logs: list[str] = []
+
+    def log(msg: str):
+        logs.append(str(msg))
+        app.logger.info(msg)
+
+    try:
+        if TOKEN_PATH.exists():
+            TOKEN_PATH.unlink()
+            log("Removed saved Gmail token.")
+        log("Credentials cleared.")
+        return _corsify(jsonify({"ok": True, "logs": logs}))
+    except Exception as exc:
+        log(f"ERROR: {exc}")
+        return _corsify(jsonify({"error": str(exc), "logs": logs})), 500
+
+
+@app.route("/load-credentials", methods=["POST", "OPTIONS"])
+def load_credentials():
+    if request.method == "OPTIONS":
+        return _corsify(app.response_class(status=204))
+    logs: list[str] = []
+
+    def log(msg: str):
+        logs.append(str(msg))
+        app.logger.info(msg)
+
+    try:
+        if "file" not in request.files:
+            return _corsify(jsonify({"error": "No file uploaded"})), 400
+        file = request.files["file"]
+        if not file.filename:
+            return _corsify(jsonify({"error": "Empty filename"})), 400
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = CREDENTIALS_PATH.with_suffix(".tmp")
+        file.save(tmp)
+        tmp.replace(CREDENTIALS_PATH)
+        if TOKEN_PATH.exists():
+            TOKEN_PATH.unlink()
+            log("Removed existing Gmail token.")
+        log("Saved credentials file. Authenticating…")
+        gmail_authenticate()
+        log("Credentials uploaded and authenticated.")
+        return _corsify(jsonify({"ok": True, "logs": logs}))
+    except Exception as exc:
+        log(f"ERROR: {exc}")
+        return _corsify(jsonify({"error": str(exc), "logs": logs})), 500
 
 
 @app.route("/populate-range-stream", methods=["GET", "OPTIONS"])

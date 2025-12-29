@@ -89,9 +89,6 @@ def save_settings(settings: dict):
     tmp.replace(SETTINGS_PATH)
 
 
-def reload_credentials():
-    load_credentials()
-
 def start_proxy_thread():
     port = find_free_port(PROXY_PORT)
     server, thread = start_proxy_server(port)
@@ -154,15 +151,12 @@ def main():
     # Toggle defaults and actions
     # (Preload Bandcamp players option moved to browser UI)
 
-    # Run / Reload credentials buttons
+    # Run / Clear credentials buttons
     actions_frame = Frame(root)
     actions_frame.grid(row=0, column=0, padx=8, pady=(8, 4), sticky="w")
 
     launch_btn = ttk.Button(actions_frame, text="Launch", width=14, style="Action.TButton", command=lambda: on_launch())
     launch_btn.grid(row=0, column=0, padx=(0, 6), sticky="w")
-
-    reload_credentials_btn = ttk.Button(actions_frame, text="Reload credentials", width=18, style="Action.TButton", command=reload_credentials)
-    reload_credentials_btn.grid(row=0, column=1, sticky="w")
 
     # Status box
     status_box = ScrolledText(root, width=80, height=12, state="disabled")
@@ -247,10 +241,6 @@ def main():
                 proxy_thread.join(timeout=1)
         finally:
             root.destroy()
-
-    if not CREDENTIALS_PATH.exists():
-        # Prompt for credentials on first launch if missing
-        root.after(50, lambda: load_credentials())
 
     # Auto-launch on start
     root.after(100, on_launch)
