@@ -838,8 +838,9 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     let clearedLogOnInit = false;
     if (populateLog) {{
       if (CLEAR_STATUS_ON_LOAD) {{
-        populateLog.textContent = "Ready.";
-        try {{ localStorage.setItem(POPULATE_LOG_KEY, "Ready."); }} catch (e) {{}}
+        const initialMsg = "Ready. Select a date range to display.";
+        populateLog.textContent = initialMsg;
+        try {{ localStorage.setItem(POPULATE_LOG_KEY, initialMsg); }} catch (e) {{}}
         clearedLogOnInit = true;
       }} else {{
         try {{
