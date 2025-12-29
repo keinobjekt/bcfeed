@@ -278,21 +278,21 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     }}
     .calendar-row {{
       display: grid;
-      grid-template-columns: 190px 1fr;
-      gap: 10px;
+      grid-template-columns: 240px 1fr;
+      gap: 12px;
       align-items: start;
     }}
     .calendar-card {{
       border: 1px solid var(--border);
       border-radius: var(--radius);
       background: var(--surface);
-      padding: 6px;
+      padding: 8px;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
-      width: 190px;
-      height: 242px;
+      width: 240px;
+      height: 320px;
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 8px;
     }}
     .calendar-label {{
       display: flex;
@@ -305,11 +305,11 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     .calendar-meta {{
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
     }}
     .calendar-nav {{
       display: flex;
-      gap: 4px;
+      gap: 6px;
       align-items: center;
     }}
     .calendar-nav button {{
@@ -317,14 +317,14 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       background: rgba(255,255,255,0.04);
       color: var(--text);
       border-radius: 6px;
-      padding: 3px 6px;
+      padding: 4px 8px;
       cursor: pointer;
     }}
     .calendar-month {{
-      font-size: 11px;
+      font-size: 12px;
       color: var(--muted);
-      width: 84px;
-      min-width: 84px;
+      width: 120px;
+      min-width: 120px;
       display: inline-block;
       text-align: center;
       letter-spacing: 0.4px;
@@ -335,28 +335,28 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       background: rgba(255,255,255,0.06);
       color: var(--text);
       border-radius: 6px;
-      padding: 3px 6px;
+      padding: 4px 8px;
       cursor: pointer;
-      font-size: 10px;
+      font-size: 11px;
       letter-spacing: 0.3px;
     }}
     .calendar-grid {{
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      gap: 3px;
-      font-size: 11px;
+      gap: 4px;
+      font-size: 12px;
       flex: 1;
-      min-height: 178px;
+      min-height: 220px;
     }}
     .calendar-log {{
       border: 1px solid var(--border);
       border-radius: var(--radius);
       background: var(--surface);
-      padding: 6px;
-      height: 242px;
+      padding: 8px;
+      height: 320px;
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 6px;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
     }}
     .scrollbox {{
@@ -381,6 +381,16 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       background: rgba(255,255,255,0.02);
       transition: transform 0.1s ease, border-color 0.12s ease, box-shadow 0.12s ease;
     }}
+    .calendar-day .date-label {{
+      display: inline-block;
+      padding: 0 6px;
+      border-radius: 999px;
+      min-width: 18px;
+    }}
+    .calendar-day.unseen-day .date-label {{
+      background: #64a8ff;
+      color: #0b0d11;
+    }}
     .calendar-day.in-range {{
       background: linear-gradient(180deg, rgba(82,208,255,0.14), rgba(82,208,255,0.05));
       border-color: rgba(82,208,255,0.5);
@@ -399,6 +409,9 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       border: 1px solid rgba(0,0,0,0.25);
       box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
       background: transparent;
+    }}
+    .calendar-day .dot.unseen {{
+      display: none;
     }}
     .calendar-day.scraped {{
       background: rgba(255,255,255,0.12);
@@ -1741,7 +1754,10 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         if (startSelectedDate && endSelectedDate && cellDate >= startSelectedDate && cellDate <= endSelectedDate) {{
           cell.classList.add("in-range");
         }}
-        cell.textContent = String(cellDate.getDate());
+        cell.textContent = "";
+        const dateLabel = document.createElement("span");
+        dateLabel.className = "date-label";
+        dateLabel.textContent = String(cellDate.getDate());
         const dots = document.createElement("div");
         dots.className = "dot-strip";
         const scraped = scrapeStatus.scraped.has(key);
@@ -1755,10 +1771,9 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
           return !state.viewed.has(relKey);
         }});
         if (hasUnseen) {{
-          const unseenDot = document.createElement("span");
-          unseenDot.className = "dot unseen";
-          dots.appendChild(unseenDot);
+          cell.classList.add("unseen-day");
         }}
+        cell.appendChild(dateLabel);
         cell.appendChild(dots);
 
         cell.addEventListener("click", () => {{
