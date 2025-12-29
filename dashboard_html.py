@@ -99,6 +99,13 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       transform: translateY(-1px);
       box-shadow: 0 6px 12px rgba(0,0,0,0.2);
     }}
+    .button:disabled {{
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: none;
+      filter: grayscale(0.2);
+      box-shadow: none;
+    }}
     h1 {{
       margin: 0;
       font-size: 22px;
@@ -1262,13 +1269,25 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         cursor.setDate(cursor.getDate() + 1);
       }}
 
-      const msg = `Selected date interval:\\n\\n${{fromVal}} to ${{toVal}}\\n\\n${{cachedDays}} of ${{totalDays}} days' releases already downloaded.\\n\\nClick \"Get releases\" to download remaining selected days.`;
+      const allCached = totalDays > 0 && cachedDays >= totalDays;
+      const msg = allCached
+        ? `Selected time period:\\n\\n${{fromVal}} to ${{toVal}}\\n\\nDisplaying all releases in this range; all dates are already downloaded.`
+        : `Selected time period:\\n\\n${{fromVal}} to ${{toVal}}\\n\\n${{totalDays-cachedDays}} of ${{totalDays}} selected days not yet downloaded.\\n\\nClick \"Get releases\" to download all dates in the selected range.`;
       if (populateLog) {{
         populateLog.textContent = msg;
       }}
       try {{
         localStorage.setItem(POPULATE_LOG_KEY, msg);
       }} catch (e) {{}}
+
+      if (populateBtn) {{
+        populateBtn.disabled = allCached;
+        populateBtn.title = allCached ? "All dates in this range are already cached" : "";
+      }}
+      if (populateBtn && !allCached) {{
+        populateBtn.disabled = false;
+        populateBtn.title = "";
+      }}
     }}
 
     function updateHeaderRange(count = null) {{
