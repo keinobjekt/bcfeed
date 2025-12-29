@@ -775,14 +775,11 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     const VIEWED_KEY = "bc_viewed_releases_v1";
     const API_ROOT = EMBED_PROXY_URL ? EMBED_PROXY_URL.replace(/\/embed-meta.*$/, "") : null;
     const HEALTH_URL = API_ROOT ? `${{API_ROOT}}/health` : null;
-    const POPULATE_LOG_KEY = "bc_populate_log_v1";
-    const populateLog = document.getElementById("populate-log");
-    let clearedLogOnInit = false;
-    if (populateLog) {{
-      populateLog.textContent = "";
-      try {{ localStorage.removeItem(POPULATE_LOG_KEY); }} catch (e) {{}}
-      clearedLogOnInit = true;
-    }}
+    const serverDownBackdrop = document.getElementById("server-down-backdrop");
+    const maxResultsBackdrop = document.getElementById("max-results-backdrop");
+    const preloadEmbedsToggle = document.getElementById("preload-embeds-toggle");
+    let serverDownShown = false;
+    let maxNoticeShown = false;
     const DEFAULT_THEME = {json.dumps(default_theme or "light")};
     const PRELOAD_KEY = "bc_preload_embeds_v1";
     function releaseKey(release) {{
@@ -1500,15 +1497,12 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     const populateBtn = document.getElementById("populate-range");
     const selectMonthBtn = document.getElementById("select-month-btn");
     const populateStatus = document.createElement("div");
+    const POPULATE_LOG_KEY = "bc_populate_log_v1";
+    const populateLog = document.getElementById("populate-log");
     const CALENDAR_STATE_KEY = "bc_calendar_state_v1";
     const headerRangeLabel = document.getElementById("header-range-label");
     const headerCountLabel = document.getElementById("header-count-label");
     const SCRAPE_STATUS_URL = API_ROOT ? `${{API_ROOT}}/scrape-status` : null;
-    const serverDownBackdrop = document.getElementById("server-down-backdrop");
-    const maxResultsBackdrop = document.getElementById("max-results-backdrop");
-    const preloadEmbedsToggle = document.getElementById("preload-embeds-toggle");
-    let serverDownShown = false;
-    let maxNoticeShown = false;
 
     function toggleSettings(open) {{
       if (!settingsBackdrop) return;
@@ -1547,11 +1541,6 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         delete r.is_track;
       }});
       renderTable();
-      if (populateLog) {{
-        const msg = "Cache cleared.";
-        populateLog.textContent = msg;
-        try {{ localStorage.setItem(POPULATE_LOG_KEY, msg); }} catch (e) {{}}
-      }}
       toggleSettings(false);
       if (hadError && clearCache) {{
         alert("Could not clear disk cache (proxy not reachable). Run the app/proxy and try again.");
@@ -1982,17 +1971,15 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         if (data && typeof data === "object") {{
           if (typeof data.from === "string") dateFilterFrom.value = data.from;
           if (typeof data.to === "string") dateFilterTo.value = data.to;
-          if (!clearedLogOnInit && populateLog && typeof data.populateLog === "string") {{
+          if (populateLog && typeof data.populateLog === "string") {{
             populateLog.textContent = data.populateLog;
           }}
         }}
       }} catch (err) {{}}
       try {{
-        if (!clearedLogOnInit) {{
-          const savedLog = localStorage.getItem(POPULATE_LOG_KEY);
-          if (populateLog && savedLog) {{
-            populateLog.textContent = savedLog;
-          }}
+        const savedLog = localStorage.getItem(POPULATE_LOG_KEY);
+        if (populateLog && savedLog) {{
+          populateLog.textContent = savedLog;
         }}
       }} catch (e) {{}}
       onDateFilterChange();
