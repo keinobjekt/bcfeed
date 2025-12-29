@@ -1275,6 +1275,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         : `Selected time period:\\n\\n${{fromVal}} to ${{toVal}}\\n\\n${{totalDays-cachedDays}} of ${{totalDays}} selected days not yet downloaded.\\n\\nClick \"Get releases\" to download all dates in the selected range.`;
       if (populateLog) {{
         populateLog.textContent = msg;
+        populateLog.style.color = allCached ? "var(--muted)" : "#ff6b6b";
       }}
       try {{
         localStorage.setItem(POPULATE_LOG_KEY, msg);
