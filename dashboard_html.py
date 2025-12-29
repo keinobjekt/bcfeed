@@ -829,7 +829,7 @@ def render_dashboard_html(
         <button id="clear-creds-btn" class="button" style="padding:6px 10px;">Clear credentials</button>
       </div>
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-        <input type="file" id="load-creds-file" accept="application/json" style="font-size:12px; max-width:220px;" />
+        <input type="file" id="load-creds-file" accept="application/json" style="display:none;" />
         <button id="load-creds-btn" class="button" style="padding:6px 10px;">Load credentials</button>
       </div>
     </div>
@@ -1087,10 +1087,7 @@ def render_dashboard_html(
     if (loadCredsBtn && loadCredsFile && LOAD_CREDS_URL) {{
       const doLoadCreds = async () => {{
         const file = loadCredsFile.files && loadCredsFile.files[0];
-        if (!file) {{
-          alert("Choose a credentials JSON file first.");
-          return;
-        }}
+        if (!file) return;
         loadCredsBtn.disabled = true;
         const original = loadCredsBtn.textContent;
         loadCredsBtn.textContent = "Loading…";
@@ -1125,7 +1122,12 @@ def render_dashboard_html(
           loadCredsBtn.textContent = original || "Load credentials";
         }}
       }};
-      loadCredsBtn.addEventListener("click", doLoadCreds);
+      loadCredsBtn.addEventListener("click", () => {{
+        if (loadCredsFile) {{
+          loadCredsFile.value = "";
+          loadCredsFile.click();
+        }}
+      }});
       loadCredsFile.addEventListener("change", () => {{
         if (loadCredsFile.files && loadCredsFile.files[0]) {{
           doLoadCreds();
@@ -1740,6 +1742,15 @@ def render_dashboard_html(
     const selectMonthBtn = document.getElementById("select-month-btn");
     const populateStatus = document.createElement("div");
     const CALENDAR_STATE_KEY = "bc_calendar_state_v1";
+    // Reset load credentials button when settings panel is toggled
+    const resetLoadCredsBtn = () => {{
+      if (loadCredsBtn) {{
+        loadCredsBtn.disabled = false;
+        loadCredsBtn.textContent = "Load credentials";
+      }}
+    }};
+    if (settingsBtn) settingsBtn.addEventListener("click", resetLoadCredsBtn);
+    if (settingsClose) settingsClose.addEventListener("click", resetLoadCredsBtn);
     const headerRangeLabel = document.getElementById("header-range-label");
     const headerCountLabel = document.getElementById("header-count-label");
     const SCRAPE_STATUS_URL = API_ROOT ? `${{API_ROOT}}/scrape-status` : null;
