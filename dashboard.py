@@ -33,6 +33,7 @@ from bs4 import BeautifulSoup
 
 from dashboard_html import render_dashboard_html
 from session_store import load_embed_cache, persist_embed_metadata
+from util import get_data_dir
 
 
 # --------------------------------------------------------------------------- #
@@ -90,6 +91,25 @@ def fetch_embed_metadata(release_url: str, timeout: int = 10) -> Dict[str, Optio
 
 
 EMBED_CACHE = load_embed_cache()
+
+
+# --------------------------------------------------------------------------- #
+# Dev settings flag
+
+def _dev_settings_enabled() -> bool:
+    """
+    Return True when a dev flag file exists in the application support directory.
+    The file name is 'dev_settings.txt'; its presence (any content) enables the
+    hidden dev-only UI toggles.
+    """
+    try:
+        flag_path = get_data_dir() / "dev_settings.txt"
+        if not flag_path.exists():
+            return False
+        content = flag_path.read_text(encoding="utf-8", errors="ignore").strip().lower()
+        return content in ("", "1", "true", "yes", "on", "enable", "enabled")
+    except Exception:
+        return False
 
 
 # --------------------------------------------------------------------------- #
@@ -184,12 +204,14 @@ def build_release_dashboard_html(
         for idx, entry in enumerate(releases_list, start=1)
     ]
     data_json = json.dumps(normalized, ensure_ascii=True)
+    dev_settings = _dev_settings_enabled()
     return render_dashboard_html(
         title=title,
         data_json=data_json,
         embed_proxy_url=embed_proxy_url,
         default_theme=default_theme,
         clear_status_on_load=clear_status_on_load,
+        show_dev_settings=dev_settings,
     )
 
 

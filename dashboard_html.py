@@ -10,7 +10,15 @@ import html
 import json
 
 
-def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | None = None, default_theme: str | None = None, clear_status_on_load: bool = False) -> str:
+def render_dashboard_html(
+    *,
+    title: str,
+    data_json: str,
+    embed_proxy_url: str | None = None,
+    default_theme: str | None = None,
+    clear_status_on_load: bool = False,
+    show_dev_settings: bool = False,
+) -> str:
     """
     Build the full dashboard HTML document.
     """
@@ -795,15 +803,15 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         <h2>Settings</h2>
         <button id="settings-close" class="button">Close</button>
       </div>
-      <div class="settings-row">
+      <div class="settings-row dev-setting">
         <input type="checkbox" id="theme-toggle" />
         <label for="theme-toggle">Dark mode</label>
       </div>
-      <div class="settings-row">
+      <div class="settings-row dev-setting">
         <input type="checkbox" id="show-cached-toggle" checked />
         <label for="show-cached-toggle">Show cached badges</label>
       </div>
-      <div style="height:12px;"></div>
+      <div class="dev-setting" style="height:12px;"></div>
       <div style="display:flex; justify-content:flex-start;">
         <button id="settings-reset" class="button" style="width:auto; padding:6px 10px;">Clear cache</button>
       </div>
@@ -834,6 +842,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     const HEALTH_URL = API_ROOT ? `${{API_ROOT}}/health` : null;
     const POPULATE_LOG_KEY = "bc_populate_log_v1";
     const CLEAR_STATUS_ON_LOAD = {clear_status_literal};
+    const SHOW_DEV_SETTINGS = {"true" if show_dev_settings else "false"};
     const serverDownBackdrop = document.getElementById("server-down-backdrop");
     const maxResultsBackdrop = document.getElementById("max-results-backdrop");
     const preloadEmbedsToggle = document.getElementById("preload-embeds-toggle");
@@ -843,9 +852,15 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     const PRELOAD_KEY = "bc_preload_embeds_v1";
     const populateLog = document.getElementById("populate-log");
     let clearedLogOnInit = false;
+    function applyDevSettingsVisibility() {{
+      const devEls = document.querySelectorAll(".dev-setting");
+      devEls.forEach((el) => {{
+        el.style.display = SHOW_DEV_SETTINGS ? "" : "none";
+      }});
+    }}
     if (populateLog) {{
       if (CLEAR_STATUS_ON_LOAD) {{
-        const initialMsg = "Ready. Select a date range to display.";
+        const initialMsg = "Select a date range to display.";
         populateLog.textContent = initialMsg;
         try {{ localStorage.setItem(POPULATE_LOG_KEY, initialMsg); }} catch (e) {{}}
         clearedLogOnInit = true;
@@ -858,6 +873,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         }} catch (e) {{}}
       }}
     }}
+    applyDevSettingsVisibility();
     function releaseKey(release) {{
       return release.url || [release.page_name, release.artist, release.title, release.date].filter(Boolean).join("|");
     }}
