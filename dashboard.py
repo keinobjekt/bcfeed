@@ -168,6 +168,7 @@ def build_release_dashboard_html(
     log: Callable[[str], None] | None = None,
     embed_proxy_url: str | None = None,
     default_theme: str | None = None,
+    clear_status_on_load: bool = False,
 ) -> str:
     """Return a full HTML document for browsing Bandcamp releases."""
     # Reload embed cache each build so embeds fetched in prior sessions (e.g., via
@@ -183,7 +184,13 @@ def build_release_dashboard_html(
         for idx, entry in enumerate(releases_list, start=1)
     ]
     data_json = json.dumps(normalized, ensure_ascii=True)
-    return render_dashboard_html(title=title, data_json=data_json, embed_proxy_url=embed_proxy_url, default_theme=default_theme)
+    return render_dashboard_html(
+        title=title,
+        data_json=data_json,
+        embed_proxy_url=embed_proxy_url,
+        default_theme=default_theme,
+        clear_status_on_load=clear_status_on_load,
+    )
 
 
 def write_release_dashboard(
@@ -195,6 +202,7 @@ def write_release_dashboard(
     log: Callable[[str], None] | None = None,
     embed_proxy_url: str | None = None,
     default_theme: str | None = None,
+    clear_status_on_load: bool = False,
 ) -> Path:
     """
     Convenience helper that writes the dashboard HTML to disk.
@@ -207,6 +215,7 @@ def write_release_dashboard(
         embed_proxy_url=embed_proxy_url,
         log=log,
         default_theme=default_theme,
+        clear_status_on_load=clear_status_on_load,
     )
     output_path.write_text(html_doc, encoding="utf-8")
     return output_path

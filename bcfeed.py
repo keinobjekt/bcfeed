@@ -93,7 +93,7 @@ def start_proxy_thread():
     server, thread = start_proxy_server(port)
     return server, thread, port
 
-def launch_from_cache(proxy_port: int, preload_embeds: bool, *, log=print, launch_browser: bool = True):
+def launch_from_cache(proxy_port: int, preload_embeds: bool, *, log=print, launch_browser: bool = True, clear_status_on_load: bool = False):
     """
     Generate dashboard from all cached releases (no Gmail fetch).
     """
@@ -107,6 +107,7 @@ def launch_from_cache(proxy_port: int, preload_embeds: bool, *, log=print, launc
         title="bcfeed",
         fetch_missing_ids=preload_embeds,
         embed_proxy_url=f"http://localhost:{proxy_port}/embed-meta",
+        clear_status_on_load=clear_status_on_load,
         log=log,
     )
     if launch_browser:
@@ -218,7 +219,7 @@ def main():
                 log(f"Building page from cached releases (proxy port {proxy_port}, preload {'on' if should_preload else 'off'})")
 
                 try:
-                    launch_from_cache(proxy_port, should_preload, log=log, launch_browser=True)
+                    launch_from_cache(proxy_port, should_preload, log=log, launch_browser=True, clear_status_on_load=True)
                     log("Dashboard generated from cache and opened in browser.")
                     log("")
                 finally:

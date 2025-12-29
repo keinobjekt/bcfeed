@@ -312,6 +312,7 @@ def reset_caches():
                 title="bcfeed",
                 fetch_missing_ids=False,
                 embed_proxy_url=embed_proxy_url,
+                clear_status_on_load=False,
                 log=lambda msg: None,
             )
         except Exception as exc:
@@ -369,6 +370,7 @@ def populate_range():
             title="bcfeed",
             fetch_missing_ids=preload_embeds,
             embed_proxy_url=embed_proxy_url,
+            clear_status_on_load=False,
             log=log,
         )
         return _corsify(jsonify({"ok": True, "logs": logs, "count": len(releases)}))
@@ -434,6 +436,7 @@ def populate_range_stream():
                     title="bcfeed",
                     fetch_missing_ids=preload_embeds,
                     embed_proxy_url=embed_proxy_url,
+                    clear_status_on_load=False,
                     log=log,
                 )
                 q.put("Regenerated dashboard.")
