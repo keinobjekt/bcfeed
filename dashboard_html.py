@@ -1293,7 +1293,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
           <td style="width:24px;"><span class="row-dot"></span></td>
           <td><a class="link" href="${{pageUrlFor(release)}}" target="_blank" rel="noopener">${{release.page_name || "Unknown"}}</a></td>
           <td><a class="link" href="${{pageUrlFor(release)}}" target="_blank" rel="noopener">${{release.artist || "—"}}</a></td>
-          <td><a class="link" href="${{release.url || "#"}}" target="_blank" rel="noopener">${{release.title || "—"}}</a>${{state.showCachedBadges && release.embed_url ? ' <span class="cached-badge">cached</span>' : ''}}</td>
+          <td><a class="link" href="${{release.url || "#"}}" target="_blank" rel="noopener" data-title-link>${{release.title || "—"}}</a>${{state.showCachedBadges && release.embed_url ? ' <span class="cached-badge">cached</span>' : ''}}</td>
           <td>${{formatDate(release.date)}}</td>
         `;
         const existingRead = state.viewed.has(releaseKey(release));
@@ -1301,7 +1301,14 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         if (initialDot) initialDot.classList.toggle("read", existingRead);
         tr.classList.toggle("unseen", !existingRead);
 
-        tr.addEventListener("click", () => {{
+        tr.addEventListener("click", (evt) => {{
+          if (evt.target && evt.target.matches("a[data-title-link]")) {{
+            // Allow middle/cmd click without toggling rows
+            if (evt.metaKey || evt.ctrlKey || evt.button === 1) {{
+              return;
+            }}
+            evt.preventDefault();
+          }}
           tr.focus();
           const existingDetail = tr.nextElementSibling;
           const hasDetail = existingDetail && existingDetail.classList.contains("detail-row");
