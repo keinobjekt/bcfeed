@@ -1237,6 +1237,39 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     }}
 
     function updateRangePreview() {{}}
+    function updateSelectionStatusLog() {{
+      let fromVal = state.dateFilterFrom || "";
+      let toVal = state.dateFilterTo || "";
+      if (fromVal && !toVal) toVal = fromVal;
+      if (toVal && !fromVal) fromVal = toVal;
+      if (!fromVal || !toVal) return;
+
+      let startDate = parseDateString(fromVal);
+      let endDate = parseDateString(toVal);
+      if (!startDate || !endDate) return;
+      if (endDate < startDate) {{
+        [startDate, endDate] = [endDate, startDate];
+        [fromVal, toVal] = [toVal, fromVal];
+      }}
+
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / msPerDay) + 1;
+      let cachedDays = 0;
+      const cursor = new Date(startDate);
+      while (cursor.getTime() <= endDate.getTime()) {{
+        const key = isoKeyFromDate(cursor);
+        if (scrapeStatus.scraped.has(key)) cachedDays += 1;
+        cursor.setDate(cursor.getDate() + 1);
+      }}
+
+      const msg = `Selected date interval:\\n\\n${{fromVal}} to ${{toVal}}\\n\\n${{cachedDays}} of ${{totalDays}} days' releases already downloaded.\\n\\nClick \"Get releases\" to download remaining selected days.`;
+      if (populateLog) {{
+        populateLog.textContent = msg;
+      }}
+      try {{
+        localStorage.setItem(POPULATE_LOG_KEY, msg);
+      }} catch (e) {{}}
+    }}
 
     function updateHeaderRange(count = null) {{
       const fromVal = state.dateFilterFrom || "";
@@ -2013,6 +2046,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       }}
       onDateFilterChange();
       updateRangePreview();
+      updateSelectionStatusLog();
     }}
 
     async function fetchScrapeStatus() {{
@@ -2030,6 +2064,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
         const notScraped = data.not_scraped || data["not_scraped"] || [];
         scrapeStatus.notScraped = new Set(notScraped || []);
         renderCalendar("range");
+        updateSelectionStatusLog();
       }} catch (err) {{
         console.warn("Failed to load scrape status", err);
       }}
@@ -2087,6 +2122,7 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       syncCalendarsFromInputs();
       renderCalendar("range");
       updateRangePreview();
+      updateSelectionStatusLog();
       updateHeaderRange();
       persistCalendarState();
       renderTable();
