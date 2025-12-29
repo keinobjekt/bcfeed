@@ -279,20 +279,20 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     .calendar-row {{
       display: grid;
       grid-template-columns: 240px 1fr;
-      gap: 12px;
+      gap: 10px;
       align-items: start;
     }}
     .calendar-card {{
       border: 1px solid var(--border);
       border-radius: var(--radius);
       background: var(--surface);
-      padding: 8px;
+      padding: 7px;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
       width: 240px;
-      height: 320px;
+      height: 290px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 7px;
     }}
     .calendar-label {{
       display: flex;
@@ -305,11 +305,11 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
     .calendar-meta {{
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
     }}
     .calendar-nav {{
       display: flex;
-      gap: 6px;
+      gap: 5px;
       align-items: center;
     }}
     .calendar-nav button {{
@@ -317,14 +317,14 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       background: rgba(255,255,255,0.04);
       color: var(--text);
       border-radius: 6px;
-      padding: 4px 8px;
+      padding: 3px 7px;
       cursor: pointer;
     }}
     .calendar-month {{
-      font-size: 12px;
+      font-size: 11px;
       color: var(--muted);
-      width: 120px;
-      min-width: 120px;
+      width: 110px;
+      min-width: 110px;
       display: inline-block;
       text-align: center;
       letter-spacing: 0.4px;
@@ -335,28 +335,28 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       background: rgba(255,255,255,0.06);
       color: var(--text);
       border-radius: 6px;
-      padding: 4px 8px;
+      padding: 3px 7px;
       cursor: pointer;
-      font-size: 11px;
+      font-size: 10px;
       letter-spacing: 0.3px;
     }}
     .calendar-grid {{
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      gap: 4px;
-      font-size: 12px;
+      gap: 3px;
+      font-size: 11px;
       flex: 1;
-      min-height: 220px;
+      min-height: 187px;
     }}
     .calendar-log {{
       border: 1px solid var(--border);
       border-radius: var(--radius);
       background: var(--surface);
-      padding: 8px;
-      height: 320px;
+      padding: 7px;
+      height: 290px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 5px;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
     }}
     .scrollbox {{
@@ -375,17 +375,17 @@ def render_dashboard_html(*, title: str, data_json: str, embed_proxy_url: str | 
       border: 1px solid var(--border);
       border-radius: 8px;
       text-align: center;
-      padding: 5px 0;
-      min-height: 28px;
+      padding: 2px 0;
+      min-height: 16px;
       cursor: pointer;
       background: rgba(255,255,255,0.02);
       transition: transform 0.1s ease, border-color 0.12s ease, box-shadow 0.12s ease;
     }}
     .calendar-day .date-label {{
       display: inline-block;
-      padding: 0 6px;
+      padding: 0 4px;
       border-radius: 999px;
-      min-width: 18px;
+      min-width: 12px;
     }}
     .calendar-day.unseen-day .date-label {{
       background: #64a8ff;
