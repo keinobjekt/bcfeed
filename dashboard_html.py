@@ -801,7 +801,7 @@ def render_dashboard_html(
     <div class="settings-panel">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
         <h2>Settings</h2>
-        <button id="settings-close" class="button">Close</button>
+        <button id="settings-close" class="button" aria-label="Close settings">✕</button>
       </div>
       <div class="settings-row dev-setting">
         <input type="checkbox" id="theme-toggle" />
@@ -815,9 +815,9 @@ def render_dashboard_html(
       <div style="display:flex; justify-content:flex-start;">
         <button id="settings-reset" class="button" style="width:auto; padding:6px 10px;">Clear cache</button>
       </div>
-      <div style="height:14px;"></div>
-      <div style="font-size:12px; font-weight:700; letter-spacing:0.3px; text-transform:uppercase; color:var(--muted);">Experimental</div>
-      <div class="settings-row">
+      <div class="dev-setting" style="height:14px;"></div>
+      <div class="dev-setting" style="font-size:12px; font-weight:700; letter-spacing:0.3px; text-transform:uppercase; color:var(--muted);">Experimental</div>
+      <div class="settings-row dev-setting">
         <input type="checkbox" id="preload-embeds-toggle" />
         <label for="preload-embeds-toggle">Preload Bandcamp players (faster browsing, slower generation)</label>
       </div>
