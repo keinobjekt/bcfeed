@@ -8,8 +8,10 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from furl import furl
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
 from bs4 import BeautifulSoup
 import re
 
@@ -19,6 +21,20 @@ from util import get_data_dir
 
 k_gmail_credentials_file = "credentials.json"
 k_client_secret_file = "client_secret_XXXXXXX.json"
+
+
+class GmailAuthError(Exception):
+    """Raised when Gmail OAuth credentials are missing, expired, or revoked."""
+
+
+def _clear_token() -> None:
+    """Remove saved token file to force a new auth flow next run."""
+    try:
+        token_path = get_data_dir() / "token.pickle"
+        if token_path.exists():
+            token_path.unlink()
+    except Exception:
+        pass
 
 def _find_credentials_file() -> Path | None:
     """
@@ -89,7 +105,14 @@ def gmail_authenticate():
     # if there are no (valid) credentials availablle, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except RefreshError as exc:
+                _clear_token()
+                raise GmailAuthError("Gmail access was revoked or expired. Reload credentials to re-authorize.") from exc
+            except Exception as exc:
+                _clear_token()
+                raise GmailAuthError(f"Gmail refresh failed: {exc}") from exc
         else:
             cred_file = _find_credentials_file()
             if not cred_file:
@@ -100,20 +123,30 @@ def gmail_authenticate():
         data_dir.mkdir(parents=True, exist_ok=True)
         with open(token_path, "wb") as token:
             pickle.dump(creds, token)
-    return build('gmail', 'v1', credentials=creds)
+    try:
+        return build('gmail', 'v1', credentials=creds)
+    except HttpError as exc:
+        _clear_token()
+        raise GmailAuthError("Gmail access failed; please reauthorize.") from exc
 
 # ------------------------------------------------------------------------ 
 def search_messages(service, query):
-    result = service.users().messages().list(userId='me',q=query).execute()
-    messages = [ ]
-    if 'messages' in result:
-        messages.extend(result['messages'])
-    while 'nextPageToken' in result:
-        page_token = result['nextPageToken']
-        result = service.users().messages().list(userId='me',q=query, pageToken=page_token).execute()
+    try:
+        result = service.users().messages().list(userId='me',q=query).execute()
+        messages = [ ]
         if 'messages' in result:
             messages.extend(result['messages'])
-    return messages
+        while 'nextPageToken' in result:
+            page_token = result['nextPageToken']
+            result = service.users().messages().list(userId='me',q=query, pageToken=page_token).execute()
+            if 'messages' in result:
+                messages.extend(result['messages'])
+        return messages
+    except HttpError as exc:
+        if getattr(exc, "status_code", None) == 401 or (exc.resp and exc.resp.status == 401):
+            _clear_token()
+            raise GmailAuthError("Gmail access revoked; please reauthorize.") from exc
+        raise
 
 # ------------------------------------------------------------------------ 
 def get_messages(service, ids, format, batch_size, log=print):
@@ -135,6 +168,9 @@ def get_messages(service, ids, format, batch_size, log=print):
                 err_msg = email_data['error']['message']
                 if email_data['error']['code'] == 429:
                     raise Exception(f"{err_msg} Try reducing batch size using argument --batch.")
+                elif email_data['error']['code'] == 401:
+                    _clear_token()
+                    raise GmailAuthError("Gmail access revoked; please reauthorize.")
                 else:
                     raise Exception(err_msg)
             email = get_html_from_message(email_data)

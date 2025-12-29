@@ -823,7 +823,7 @@ def render_dashboard_html(
       </div>
       <div style="height:12px;"></div>
       <div style="display:flex; justify-content:flex-start;">
-        <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" class="button" style="background:#b83a3a; border-color:#b83a3a; color:#fff;">Revoke Gmail access</a>
+        <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" class="button" style="background:#b83a3a; border-color:#b83a3a; color:#fff; padding:6px 10px; font-size:12px;">Revoke Gmail access</a>
       </div>
     </div>
   </div>
@@ -1994,6 +1994,20 @@ def render_dashboard_html(
           try {{ localStorage.setItem(POPULATE_LOG_KEY, ""); }} catch (e) {{}}
           const url = `${{API_ROOT}}/populate-range-stream?start=${{encodeURIComponent(startVal)}}&end=${{encodeURIComponent(endVal)}}&preload_embeds=${{preloadEmbeds ? "true" : "false"}}`;
           const es = new EventSource(url);
+          const handleError = (ev) => {{
+            es.close();
+            const msg = (ev && ev.data) ? String(ev.data) : "Populate failed (stream error)";
+            const current = populateLog ? populateLog.textContent : "";
+            const next = current ? `${{current}}\\n${{msg}}` : msg;
+            if (populateLog) populateLog.textContent = next;
+            try {{ localStorage.setItem(POPULATE_LOG_KEY, next); }} catch (e) {{}}
+            populateStatus.textContent = "";
+            alert(msg);
+            if (btn) {{
+              btn.disabled = false;
+              btn.textContent = original || "Populate";
+            }}
+          }};
           es.onmessage = (ev) => {{
             if (!ev || !ev.data) return;
             if (!maxNoticeShown && ev.data.includes("Maximum results")) {{
@@ -2005,21 +2019,16 @@ def render_dashboard_html(
             const next = current ? `${{current}}\\n${{ev.data}}` : ev.data;
             if (populateLog) populateLog.textContent = next;
             try {{ localStorage.setItem(POPULATE_LOG_KEY, next); }} catch (e) {{}}
+            if (String(ev.data || "").startsWith("ERROR:")) {{
+              handleError({{ data: ev.data }});
+            }}
           }};
+          es.addEventListener("error", handleError);
           es.addEventListener("done", () => {{
             populateStatus.textContent = "Done. Reloading…";
             es.close();
             window.location.reload();
           }});
-          es.onerror = () => {{
-            es.close();
-            populateStatus.textContent = "";
-            alert("Populate failed (stream error)");
-            if (btn) {{
-              btn.disabled = false;
-              btn.textContent = original || "Populate";
-            }}
-          }};
           return;
         }}
 

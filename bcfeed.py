@@ -85,7 +85,14 @@ def save_settings(settings: dict):
 
 
 def reload_credentials():
-    load_credentials()
+    if load_credentials():
+        try:
+            from gmail import gmail_authenticate  # local import to avoid cycle
+            gmail_authenticate()
+        except Exception as exc:
+            messagebox.showerror("Error", f"Failed to authenticate with Gmail: {exc}")
+        else:
+            messagebox.showinfo("Gmail", "Credentials reloaded and authenticated.")
 
 
 def start_proxy_thread():

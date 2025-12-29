@@ -28,7 +28,7 @@ from util import get_data_dir
 from session_store import scrape_status_for_range, get_full_release_cache
 from pipeline import gather_releases_with_cache
 from dashboard import write_release_dashboard
-from gmail import _find_credentials_file
+from gmail import _find_credentials_file, GmailAuthError
 
 app = Flask(__name__)
 
@@ -374,6 +374,8 @@ def populate_range():
             log=log,
         )
         return _corsify(jsonify({"ok": True, "logs": logs, "count": len(releases)}))
+    except GmailAuthError as exc:
+        return _corsify(jsonify({"error": str(exc), "logs": logs})), 401
     except Exception as exc:
         return _corsify(jsonify({"error": str(exc), "logs": logs})), 500
     finally:
@@ -395,6 +397,8 @@ def populate_range_stream():
             "Access-Control-Allow-Origin": "*",
             "Cache-Control": "no-cache",
         }
+        # Also emit a one-line log-friendly version for browser status box
+        app.logger.error(msg)
         return Response(stream_with_context(gen()), mimetype="text/event-stream", headers=headers)
 
     if not start_arg or not end_arg:
@@ -440,7 +444,7 @@ def populate_range_stream():
                     log=log,
                 )
                 q.put("Regenerated dashboard.")
-            except Exception as exc:
+            except GmailAuthError as exc:
                 q.put(f"ERROR: {exc}")
             finally:
                 q.put(None)
