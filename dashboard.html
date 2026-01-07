@@ -421,11 +421,12 @@
       display: inline-block;
       padding: 0 4px;
       border-radius: 999px;
-      min-width: 12px;
+      min-width: 14px;
+      color: var(--text);
     }
     .calendar-day.unseen-day .date-label {
-      background: #64a8ff;
-      color: #0b0d11;
+      background: rgba(100,168,255,0.28);
+      color: #fff;
     }
     .calendar-day.in-range {
       background: linear-gradient(180deg, rgba(82,208,255,0.14), rgba(82,208,255,0.05));
@@ -447,7 +448,18 @@
       background: transparent;
     }
     .calendar-day .dot.unseen {
-      display: none;
+      background: #64a8ff;
+      border-color: rgba(50,120,200,0.6);
+      box-shadow: 0 0 0 1px rgba(100,168,255,0.35);
+    }
+    .calendar-day .dot.unseen .red-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #ff5f5f;
+      border: 1px solid rgba(0,0,0,0.2);
+      display: block;
+      margin: -1px auto 0 auto;
     }
     .calendar-day.scraped {
       background: rgba(255,255,255,0.12);
@@ -779,7 +791,15 @@
                     </div>
                   </div>
                   <div class="calendar-grid" id="calendar-range"></div>
-                  <div style="font-size:12px; color:var(--muted); text-align:left; margin-top:auto; padding-left:4px;">Shift-click to select range</div>
+                  <div style="font-size:12px; color:var(--muted); text-align:left; margin-top:auto; padding-left:4px; display:flex; flex-direction:column; gap:2px;">
+                    <span style="letter-spacing:0.3px;">SHIFT-CLICK TO SELECT RANGE</span>
+                    <span style="display:grid; grid-template-columns:18px 1fr; align-items:center; gap:6px; margin-top:2px;">
+                      <span style="display:inline-block; width:14px; height:14px; border-radius:999px; background:rgba(100,168,255,0.28);"></span>
+                      <span>Populated</span>
+                      <span style="display:inline-block; width:6px; height:6px; border-radius:999px; background:#ff5f5f; border:1px solid rgba(0,0,0,0.25); margin-left:2px;"></span>
+                      <span>Unseen</span>
+                    </span>
+                  </div>
                 </div>
                 <div class="calendar-card" style="min-height:100%; display:flex; flex-direction:column; gap:8px;">
                   <div class="calendar-label" style="justify-content:flex-start; gap:8px;">
@@ -2100,23 +2120,32 @@
         const dateLabel = document.createElement("span");
         dateLabel.className = "date-label";
         dateLabel.textContent = String(cellDate.getDate());
-        const dots = document.createElement("div");
-        dots.className = "dot-strip";
         const scraped = scrapeStatus.scraped.has(key);
-        if (scraped) {
-          cell.classList.add("scraped");
-        }
         const hasUnseen = releases.some(rel => {
           const relDate = formatDate(rel.date);
           const relKey = releaseKey(rel);
           if (!relDate || relDate !== key) return false;
           return !state.viewed.has(relKey);
         });
-        if (hasUnseen) {
+        if (scraped) {
           cell.classList.add("unseen-day");
         }
-        cell.appendChild(dateLabel);
-        cell.appendChild(dots);
+        if (hasUnseen) {
+          const dot = document.createElement("span");
+          dot.className = "dot unseen";
+          dot.style.background = "#ff5f5f";
+          dot.style.borderColor = "rgba(0,0,0,0.25)";
+          cell.appendChild(dateLabel);
+          const dots = document.createElement("div");
+          dots.className = "dot-strip";
+          dots.appendChild(dot);
+          cell.appendChild(dots);
+        } else {
+          cell.appendChild(dateLabel);
+          const dots = document.createElement("div");
+          dots.className = "dot-strip";
+          cell.appendChild(dots);
+        }
 
         cell.addEventListener("click", (evt) => {
           if (isDisabled) return;
