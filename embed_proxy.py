@@ -258,6 +258,21 @@ def releases_endpoint():
         return _corsify(app.response_class(status=204))
     try:
         releases = get_full_release_cache()
+        embed_cache = _load_embed_cache()
+        if isinstance(embed_cache, dict) and embed_cache:
+            for rel in releases:
+                url = rel.get("url")
+                meta = embed_cache.get(url or "")
+                if not meta:
+                    continue
+                if meta.get("embed_url"):
+                    rel["embed_url"] = meta.get("embed_url")
+                if meta.get("release_id"):
+                    rel["release_id"] = meta.get("release_id")
+                if "is_track" in meta:
+                    rel["is_track"] = meta.get("is_track")
+                if meta.get("description"):
+                    rel["description"] = meta.get("description")
     except Exception as exc:
         return _corsify(jsonify({"error": f"Failed to load releases: {exc}"})), 500
     return _corsify(jsonify({"releases": releases}))

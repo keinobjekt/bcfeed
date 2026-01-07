@@ -304,12 +304,14 @@
     .date-range-panel {
       display: grid;
       gap: 8px;
+      width: 100%;
     }
     .calendar-row {
       display: grid;
-      grid-template-columns: 240px 1fr;
-      gap: 10px;
+      grid-template-columns: 240px 220px 1fr;
+      gap: 12px;
       align-items: start;
+      width: 100%;
     }
     .calendar-card {
       border: 1px solid var(--border);
@@ -317,8 +319,8 @@
       background: var(--surface);
       padding: 7px;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
-      width: 240px;
-      height: 290px;
+      width: 100%;
+      min-height: 290px;
       display: flex;
       flex-direction: column;
       gap: 7px;
@@ -765,40 +767,44 @@
           <span class="wireframe-carat">▾</span>
         </summary>
         <div class="wireframe-body" id="scrape-wireframe-body">
-          <div class="date-range-panel">
-            <div class="calendar-row">
-              <div class="calendar-card">
-                <div class="calendar-label">
-                  <div class="calendar-meta">
-                    <button type="button" class="calendar-today-btn" data-cal-today="range">Today</button>
-                    <div class="calendar-nav">
-                      <button type="button" data-cal-nav="range-prev" aria-label="Previous month">‹</button>
-                      <span class="calendar-month" id="calendar-range-month"></span>
-                      <button type="button" data-cal-nav="range-next" aria-label="Next month">›</button>
+            <div class="date-range-panel">
+              <div class="calendar-row" style="display:grid; grid-template-columns: 1fr 0.9fr 1.1fr; gap:8px; align-items:start;">
+                <div class="calendar-card" style="height:100%;">
+                  <div class="calendar-label">
+                    <div class="calendar-meta">
+                      <button type="button" class="calendar-today-btn" data-cal-today="range">Today</button>
+                      <div class="calendar-nav">
+                        <button type="button" data-cal-nav="range-prev" aria-label="Previous month">‹</button>
+                        <span class="calendar-month" id="calendar-range-month"></span>
+                        <button type="button" data-cal-nav="range-next" aria-label="Next month">›</button>
+                      </div>
                     </div>
                   </div>
+                  <div class="calendar-grid" id="calendar-range"></div>
                 </div>
-                <div class="calendar-grid" id="calendar-range"></div>
-              </div>
-              <div class="calendar-log">
-                <div class="calendar-label" style="justify-content:flex-start; gap:8px;">
-                  <span style="font-weight:600;">Status</span>
+                <div class="calendar-card" style="min-height:100%; display:flex; flex-direction:column; gap:8px;">
+                  <div class="calendar-label" style="justify-content:flex-start; gap:8px;">
+                    <span style="font-weight:600;">Actions</span>
+                  </div>
+                  <div style="display:grid; gap:8px;">
+                    <button id="select-month-btn" class="button" style="background:var(--panel); border:1px solid var(--border); color:var(--text);">Select this month</button>
+                    <button id="populate-range" class="button" style="background:#b83a3a; border-color:#b83a3a;">Get releases</button>
+                    <button id="preload-range" class="button" style="background:#b83a3a; border-color:#b83a3a;">Preload release data</button>
+                  </div>
                 </div>
-                <div id="populate-log" class="scrollbox"></div>
+                <div class="calendar-log" style="width:100%;">
+                  <div class="calendar-label" style="justify-content:flex-start; gap:8px;">
+                    <span style="font-weight:600;">Status</span>
+                  </div>
+                  <div id="populate-log" class="scrollbox" style="width:100%;"></div>
+                </div>
               </div>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-              <div style="display:flex; gap:8px; align-items:center;">
-                <button id="select-month-btn" class="button" style="background:var(--panel); border:1px solid var(--border); color:var(--text);">Select this month</button>
-                <button id="populate-range" class="button" style="background:#b83a3a; border-color:#b83a3a;">Get releases</button>
+              <div style="display:none;">
+                <input type="text" id="date-filter-from" />
+                <input type="text" id="date-filter-to" />
               </div>
-            </div>
-            <div style="display:none;">
-              <input type="text" id="date-filter-from" />
-              <input type="text" id="date-filter-to" />
             </div>
           </div>
-        </div>
       </details>
       <div class="table-wrapper">
         <table aria-label="Bandcamp releases">
@@ -1257,12 +1263,9 @@
     }
     function formatDate(value) {
       if (!value) return "";
-      const parsed = new Date(value);
-      if (isNaN(parsed.getTime())) return value;
-      const y = parsed.getFullYear();
-      const m = `${parsed.getMonth() + 1}`.padStart(2, "0");
-      const d = `${parsed.getDate()}`.padStart(2, "0");
-      return `${y}-${m}-${d}`;
+      const normalized = normalizeDateString(value);
+      if (normalized) return normalized;
+      return value;
     }
 
     function pageUrlFor(release) {
@@ -1516,6 +1519,13 @@
         const label = count == null ? "" : `${count} release${count === 1 ? "" : "s"} shown`;
         headerCountLabel.textContent = label;
       }
+      const hasPendingPreload = releases.some(r => withinSelectedRange(r) && r.url && !(r.embed_url && r.description));
+      if (preloadBtn) {
+        preloadBtn.disabled = !hasPendingPreload;
+        preloadBtn.style.opacity = hasPendingPreload ? "1" : "0.6";
+        preloadBtn.style.cursor = hasPendingPreload ? "pointer" : "not-allowed";
+        preloadBtn.title = hasPendingPreload ? "Fetch embed data for releases in this range" : "All embeds already cached for this range";
+      }
     }
 
     function syncShowCheckboxAvailability() {
@@ -1534,11 +1544,12 @@
       const dir = direction === "asc" ? 1 : -1;
       return items.slice().sort((a, b) => {
         if (sortKey === "date") {
-          const da = new Date(a.date);
-          const db = new Date(b.date);
-          const aTime = isNaN(da) ? 0 : da.getTime();
-          const bTime = isNaN(db) ? 0 : db.getTime();
-          return (aTime - bTime) * dir;
+          const da = normalizeDateString(a.date);
+          const db = normalizeDateString(b.date);
+          if (da === db) return 0;
+          if (!da) return 1;
+          if (!db) return -1;
+          return da > db ? dir : -dir;
         }
         const av = (a[sortKey] || "").toLowerCase();
         const bv = (b[sortKey] || "").toLowerCase();
@@ -1853,6 +1864,7 @@
     const calendarRange = document.getElementById("calendar-range");
     const calendarRangeMonth = document.getElementById("calendar-range-month");
     const populateBtn = document.getElementById("populate-range");
+    const preloadBtn = document.getElementById("preload-range");
     const selectMonthBtn = document.getElementById("select-month-btn");
     const populateStatus = document.createElement("div");
     const CALENDAR_STATE_KEY = "bc_calendar_state_v1";
@@ -1868,6 +1880,13 @@
     const headerRangeLabel = document.getElementById("header-range-label");
     const headerCountLabel = document.getElementById("header-count-label");
     const SCRAPE_STATUS_URL = API_ROOT ? `${API_ROOT}/scrape-status` : null;
+    function normalizeDateString(value) {
+      if (!value) return null;
+      const match = String(value).match(/(\d{4})[-/](\d{2})[-/](\d{2})/);
+      if (!match) return null;
+      const [, y, m, d] = match;
+      return `${y}-${m}-${d}`;
+    }
 
     function toggleSettings(open) {
       if (!settingsBackdrop) return;
@@ -1992,8 +2011,9 @@
     }
 
     function parseDateString(value) {
-      if (!value) return null;
-      const parts = value.split("-");
+      const normalized = normalizeDateString(value);
+      if (!normalized) return null;
+      const parts = normalized.split("-");
       if (parts.length !== 3) return null;
       const [y, m, d] = parts.map(Number);
       const parsed = new Date(y, m - 1, d);
@@ -2007,14 +2027,15 @@
       let toVal = state.dateFilterTo || "";
       if (fromVal && !toVal) toVal = fromVal;
       if (toVal && !fromVal) fromVal = toVal;
-      const rowTs = Date.parse(release.date);
+      const rowDate = normalizeDateString(release.date);
+      if (!rowDate) return true;
       if (fromVal) {
-        const fromTs = Date.parse(fromVal);
-        if (!isNaN(fromTs) && !isNaN(rowTs) && rowTs < fromTs) return false;
+        const fromDate = normalizeDateString(fromVal);
+        if (fromDate && rowDate < fromDate) return false;
       }
       if (toVal) {
-        const toTs = Date.parse(toVal);
-        if (!isNaN(toTs) && !isNaN(rowTs) && rowTs > toTs) return false;
+        const toDate = normalizeDateString(toVal);
+        if (toDate && rowDate > toDate) return false;
       }
       return true;
     }
@@ -2192,8 +2213,11 @@
     if (selectMonthBtn) {
       selectMonthBtn.addEventListener("click", selectVisibleMonthRange);
     }
+    if (preloadBtn) {
+      preloadBtn.addEventListener("click", preloadEmbedsForRange);
+    }
 
-    function populateRangeFromCalendars() {
+    function populateRangeFromCalendars(preloadEmbeds = false, triggerBtn = null) {
       checkServerAlive();
       applyCalendarFiltersFromSelection();
       let startVal = dateFilterFrom ? dateFilterFrom.value.trim() : "";
@@ -2202,18 +2226,18 @@
       if (endVal && !startVal) startVal = endVal;
       if (!API_ROOT || !startVal || !endVal) return;
       if (populateLog) populateLog.style.color = "";
-      const btn = populateBtn;
+      const btn = triggerBtn || populateBtn;
       const original = btn ? btn.textContent : "";
       if (btn) {
         btn.disabled = true;
-        btn.textContent = "Populating…";
+        btn.textContent = preloadEmbeds ? "Preloading…" : "Populating…";
       }
       populateStatus.textContent = "";
 
       async function runPopulate() {
         if (window.EventSource) {
           if (populateLog) populateLog.textContent = "";
-          const url = `${API_ROOT}/populate-range-stream?start=${encodeURIComponent(startVal)}&end=${encodeURIComponent(endVal)}&preload_embeds=false`;
+          const url = `${API_ROOT}/populate-range-stream?start=${encodeURIComponent(startVal)}&end=${encodeURIComponent(endVal)}&preload_embeds=${preloadEmbeds ? "true" : "false"}`;
           const es = new EventSource(url);
           const handleError = (ev) => {
             es.close();
@@ -2255,7 +2279,7 @@
           const resp = await fetch(`${API_ROOT}/populate-range`, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({start: startVal, end: endVal, preload_embeds: false}),
+            body: JSON.stringify({start: startVal, end: endVal, preload_embeds: preloadEmbeds}),
           });
           const data = await resp.json().catch(() => ({}));
           const joinedLogs = Array.isArray(data.logs) ? data.logs.join("\n") : "";
@@ -2282,13 +2306,69 @@
         } finally {
           if (btn) {
             btn.disabled = false;
-            btn.textContent = original || "Populate";
+            btn.textContent = original || (preloadEmbeds ? "Preload release data" : "Populate");
           }
         }
       }
       runPopulate();
     }
-    if (populateBtn) populateBtn.addEventListener("click", populateRangeFromCalendars);
+    if (populateBtn) populateBtn.addEventListener("click", () => populateRangeFromCalendars(false, populateBtn));
+
+    async function preloadEmbedsForRange() {
+      if (!EMBED_PROXY_URL) {
+        alert("Embed proxy not configured.");
+        return;
+      }
+      checkServerAlive();
+      applyCalendarFiltersFromSelection();
+      const btn = preloadBtn;
+      const original = btn ? btn.textContent : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Preloading…";
+      }
+      const candidates = releases
+        .filter(r => withinSelectedRange(r))
+        .filter(r => r.url)
+        .filter(r => !(r.embed_url && r.description));
+      const total = candidates.length;
+      if (populateLog) {
+        populateLog.style.color = "";
+        populateLog.textContent = total
+          ? `Preloading embeds for ${total} releases…`
+          : "Nothing to preload for this range.";
+      }
+      let success = 0;
+      let failures = 0;
+      for (let i = 0; i < candidates.length; i++) {
+        const release = candidates[i];
+        const label = `${release.title || release.url || "Release"}`;
+        appendPopulateLogLine(`(${i + 1}/${total}) ${label}`);
+        try {
+          const embedUrl = await ensureEmbed(release);
+          if (embedUrl) {
+            success += 1;
+          } else {
+            failures += 1;
+            appendPopulateLogLine(`    No embed found for ${label}`);
+          }
+        } catch (err) {
+          failures += 1;
+          appendPopulateLogLine(`    Error for ${label}: ${err}`);
+        }
+      }
+      appendPopulateLogLine(`Preload complete. Cached: ${success}/${total}${failures ? `, failed: ${failures}` : ""}.`);
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = original || "Preload release data";
+      }
+      if (total === 0) {
+        populateStatus.textContent = "Nothing to preload.";
+      } else {
+        populateStatus.textContent = "Preload done.";
+      }
+      renderTable();
+    }
 
     function setDefaultDateFilters() {
       if ((dateFilterFrom && dateFilterFrom.value) || (dateFilterTo && dateFilterTo.value)) return;
