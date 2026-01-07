@@ -1538,13 +1538,47 @@
         const label = count == null ? "" : `${count} release${count === 1 ? "" : "s"} shown`;
         headerCountLabel.textContent = label;
       }
-      const hasPendingPreload = releases.some(r => withinSelectedRange(r) && r.url && !(r.embed_url && r.description));
+      const rangeReleases = releases.filter(r => withinSelectedRange(r) && r.url);
+      const hasPendingPreload = rangeReleases.some(r => !(r.embed_url && r.description));
+      const fromKey = state.dateFilterFrom || state.dateFilterTo || "";
+      const toKey = state.dateFilterTo || state.dateFilterFrom || "";
+      const hasScrapedRange = scrapeStatus && scrapeStatus.scraped
+        ? (() => {
+            const start = parseDateString(fromKey);
+            const end = parseDateString(toKey || fromKey);
+            if (!start || !end) return false;
+            let cursor = new Date(start);
+            const last = new Date(end);
+            while (cursor <= last) {
+              const key = isoKeyFromDate(cursor);
+              if (!scrapeStatus.scraped.has(key)) return false;
+              cursor.setDate(cursor.getDate() + 1);
+            }
+            return true;
+          })()
+        : false;
       if (preloadBtn) {
-        preloadBtn.disabled = !hasPendingPreload;
-        preloadBtn.style.opacity = hasPendingPreload ? "1" : "0.6";
-        preloadBtn.style.cursor = hasPendingPreload ? "pointer" : "not-allowed";
-        preloadBtn.title = hasPendingPreload ? "Fetch embed data for releases in this range" : "All embeds already cached for this range";
-        preloadBtn.textContent = hasPendingPreload ? "Preload release data" : "Release data preloaded";
+        const fullyPreloaded = hasScrapedRange && rangeReleases.length > 0 && !hasPendingPreload;
+        const canPreload = hasScrapedRange && hasPendingPreload;
+        if (fullyPreloaded) {
+          preloadBtn.disabled = true;
+          preloadBtn.textContent = "Release data preloaded";
+          preloadBtn.title = "All embeds already cached for this range";
+        } else if (canPreload) {
+          preloadBtn.disabled = false;
+          preloadBtn.textContent = "Preload release data";
+          preloadBtn.title = "Fetch embed data for releases in this range";
+        } else if (!hasScrapedRange){
+          preloadBtn.disabled = true;
+          preloadBtn.textContent = "Preload release data";
+          preloadBtn.title = "Populate this range before preloading embeds";
+        } else {
+          preloadBtn.disabled = true;
+          preloadBtn.textContent = "Preload release data";
+          preloadBtn.title = "Preload unavailable";
+        }
+        preloadBtn.style.opacity = preloadBtn.disabled ? "0.6" : "1";
+        preloadBtn.style.cursor = preloadBtn.disabled ? "not-allowed" : "pointer";
       }
     }
 
@@ -2480,6 +2514,7 @@
         scrapeStatus.notScraped = new Set(notScraped || []);
         renderCalendar("range");
         updateSelectionStatusLog();
+        updateHeaderRange();
       } catch (err) {
         console.warn("Failed to load scrape status", err);
       }
