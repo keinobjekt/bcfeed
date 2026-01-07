@@ -1507,16 +1507,18 @@
       const allCached = totalDays > 0 && cachedDays >= totalDays;
       if (populateLog) {
         msg = allCached
-          ? `Selected time period:\n\n${fromVal} to ${toVal}\n\nDate range fully populated. Displaying all releases in this date range.`
-          : `Selected time period:\n\n${fromVal} to ${toVal}\n\n${totalDays-cachedDays} of ${totalDays} selected days not yet populated.\n\nClick "Populate release list" to populate all dates in the selected range.`; 
+        ? `Selected time period:\n\n${fromVal} to ${toVal}\n\nDate range fully populated. Displaying all releases in this date range.`
+        : `Selected time period:\n\n${fromVal} to ${toVal}\n\n${totalDays-cachedDays} of ${totalDays} selected days not yet populated.\n\nClick "Populate release list" to populate all dates in the selected range.`; 
+
+        populateLog.innerHTML = msg.replace(/\n/g, "<br>");
+        populateLog.style.color = allCached ? "var(--muted)" : "#64a8ff";
+        
         const rangeReleases = releases.filter(r => withinSelectedRange(r) && r.url);
         const hasPreloadableReleases = rangeReleases.some(r => !(r.embed_url && r.description));
         if (hasPreloadableReleases) {
-          msg += "\n\nFor faster browsing, you can click 'Preload release data' to pre-fetch Bandcamp players for releases in this range.";
+          msg = `\n\n<span style="color:#64a8ff;">For faster browsing, you can click 'Preload release data' to pre-fetch Bandcamp players for releases in this range.</span>`;
+          populateLog.innerHTML += msg.replace(/\n/g, "<br>");
         }
-        
-        populateLog.textContent = msg;
-        populateLog.style.color = allCached ? "var(--muted)" : "#ff6b6b";
       }
 
       if (populateBtn) {
