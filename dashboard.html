@@ -1505,10 +1505,16 @@
       }
 
       const allCached = totalDays > 0 && cachedDays >= totalDays;
-      const msg = allCached
-        ? `Selected time period:\n\n${fromVal} to ${toVal}\n\nDisplaying all releases in this range; all dates are already downloaded.`
-        : `Selected time period:\n\n${fromVal} to ${toVal}\n\n${totalDays-cachedDays} of ${totalDays} selected days not yet downloaded.\n\nClick "Get releases" to download all dates in the selected range.`;
       if (populateLog) {
+        msg = allCached
+          ? `Selected time period:\n\n${fromVal} to ${toVal}\n\nDate range fully populated. Displaying all releases in this date range.`
+          : `Selected time period:\n\n${fromVal} to ${toVal}\n\n${totalDays-cachedDays} of ${totalDays} selected days not yet populated.\n\nClick "Populate release list" to populate all dates in the selected range.`; 
+        const rangeReleases = releases.filter(r => withinSelectedRange(r) && r.url);
+        const hasPreloadableReleases = rangeReleases.some(r => !(r.embed_url && r.description));
+        if (hasPreloadableReleases) {
+          msg += "\n\nFor faster browsing, you can click 'Preload release data' to pre-fetch Bandcamp players for releases in this range.";
+        }
+        
         populateLog.textContent = msg;
         populateLog.style.color = allCached ? "var(--muted)" : "#ff6b6b";
       }
