@@ -767,7 +767,7 @@
         <div class="wireframe-body" id="scrape-wireframe-body">
             <div class="date-range-panel">
               <div class="calendar-row" style="display:grid; grid-template-columns: 1fr 0.9fr 1.1fr; gap:8px; align-items:start;">
-                <div class="calendar-card" style="height:100%;">
+                <div class="calendar-card" style="height:100%; position:relative;">
                   <div class="calendar-label">
                     <div class="calendar-meta">
                       <button type="button" class="calendar-today-btn" data-cal-today="range">Today</button>
@@ -779,6 +779,7 @@
                     </div>
                   </div>
                   <div class="calendar-grid" id="calendar-range"></div>
+                  <div style="font-size:12px; color:var(--muted); text-align:left; margin-top:auto; padding-left:4px;">Shift-click to select range</div>
                 </div>
                 <div class="calendar-card" style="min-height:100%; display:flex; flex-direction:column; gap:8px;">
                   <div class="calendar-label" style="justify-content:flex-start; gap:8px;">
@@ -2117,24 +2118,44 @@
         cell.appendChild(dateLabel);
         cell.appendChild(dots);
 
-        cell.addEventListener("click", () => {
+        cell.addEventListener("click", (evt) => {
           if (isDisabled) return;
-          const startKey = cal.startKey;
-          const endKey = cal.endKey;
           const clickedKey = key;
-          if (!startKey || (startKey && endKey)) {
-            // Start a new selection
+          if (evt.shiftKey) {
+            const startKey = cal.startKey || cal.endKey;
+            const endKey = cal.endKey || cal.startKey;
+            const baseStart = startKey ? parseDateString(startKey) : null;
+            const baseEnd = endKey ? parseDateString(endKey) : null;
+            const clickedDate = parseDateString(clickedKey);
+            if (baseStart && baseEnd && clickedDate) {
+              const newStart = baseStart < baseEnd ? baseStart : baseEnd;
+              const newEnd = baseStart < baseEnd ? baseEnd : baseStart;
+              if (clickedDate < newStart) {
+                cal.startKey = isoKeyFromDate(clickedDate);
+                cal.endKey = isoKeyFromDate(newEnd);
+              } else if (clickedDate > newEnd) {
+                cal.startKey = isoKeyFromDate(newStart);
+                cal.endKey = isoKeyFromDate(clickedDate);
+              } else {
+                // clicked inside range → collapse to single day
+                cal.startKey = clickedKey;
+                cal.endKey = null;
+              }
+            } else if (cal.startKey) {
+              cal.endKey = clickedKey;
+              const s = parseDateString(cal.startKey);
+              const e = parseDateString(cal.endKey);
+              if (s && e && e < s) {
+                cal.endKey = cal.startKey;
+                cal.startKey = clickedKey;
+              }
+            } else {
+              cal.startKey = clickedKey;
+              cal.endKey = null;
+            }
+          } else {
             cal.startKey = clickedKey;
             cal.endKey = null;
-          } else if (startKey && !endKey) {
-            const startDate = parseDateString(startKey);
-            const clickedDate = cellDate;
-            if (startDate && clickedDate < startDate) {
-              cal.endKey = startKey;
-              cal.startKey = clickedKey;
-            } else {
-              cal.endKey = clickedKey;
-            }
           }
           renderCalendar("range");
           applyCalendarFiltersFromSelection();
