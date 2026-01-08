@@ -2340,19 +2340,24 @@
       }
       populateStatus.textContent = "";
 
-      async function runPopulate() {
-        if (window.EventSource) {
-          if (populateLog) populateLog.textContent = "";
-          const url = `${API_ROOT}/populate-range-stream?start=${encodeURIComponent(startVal)}&end=${encodeURIComponent(endVal)}&preload_embeds=${preloadEmbeds ? "true" : "false"}`;
-          const es = new EventSource(url);
-          const handleError = (ev) => {
-            es.close();
-            const msg = (ev && ev.data) ? String(ev.data) : "Populate failed (stream error)";
-            const current = populateLog ? populateLog.textContent : "";
-            const next = current ? `${current}\n${msg}` : msg;
-            if (populateLog) populateLog.textContent = next;
-            populateStatus.textContent = "";
-            alert(msg);
+          async function runPopulate() {
+            if (window.EventSource) {
+              if (populateLog) populateLog.textContent = "";
+              const url = `${API_ROOT}/populate-range-stream?start=${encodeURIComponent(startVal)}&end=${encodeURIComponent(endVal)}&preload_embeds=${preloadEmbeds ? "true" : "false"}`;
+              const es = new EventSource(url);
+              const handleError = (ev) => {
+                es.close();
+                const msg = (ev && ev.data) ? String(ev.data) : "Populate failed (stream error)";
+                const lower = msg.toLowerCase();
+                if (!maxNoticeShown && lower.includes("maximum") && lower.includes("result")) {
+                  maxNoticeShown = true;
+                  showMaxResultsModal();
+                }
+                const current = populateLog ? populateLog.textContent : "";
+                const next = current ? `${current}\n${msg}` : msg;
+                if (populateLog) populateLog.textContent = next;
+                populateStatus.textContent = "";
+                alert(msg);
             if (btn) {
               btn.disabled = false;
               btn.textContent = original || "Populate";
@@ -2381,35 +2386,47 @@
           return;
         }
 
-        try {
-          const resp = await fetch(`${API_ROOT}/populate-range`, {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({start: startVal, end: endVal, preload_embeds: preloadEmbeds}),
-          });
-          const data = await resp.json().catch(() => ({}));
-          const joinedLogs = Array.isArray(data.logs) ? data.logs.join("\n") : "";
-          if (!resp.ok) {
-            if (populateLog && joinedLogs) {
-              populateLog.textContent = joinedLogs;
-            }
-            throw new Error(data.error || `HTTP ${resp.status}`);
-          }
-          if (populateLog && joinedLogs) {
-            populateLog.textContent = joinedLogs;
-          }
-          if (!maxNoticeShown && joinedLogs.includes("Maximum results")) {
-            maxNoticeShown = true;
-            showMaxResultsModal();
-            appendPopulateLogLine("Maximum number of results reached. Stopping download.");
-          }
-          populateStatus.textContent = "Done. Reloading…";
-          window.location.reload();
-        } catch (err) {
-          populateStatus.textContent = "";
-          if (populateLog) populateLog.textContent = String(err || "Error");
-          alert(`Populate failed: ${err.message || err}`);
-        } finally {
+            try {
+              const resp = await fetch(`${API_ROOT}/populate-range`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({start: startVal, end: endVal, preload_embeds: preloadEmbeds}),
+              });
+              const data = await resp.json().catch(() => ({}));
+              const joinedLogs = Array.isArray(data.logs) ? data.logs.join("\n") : "";
+              const lowerLogs = joinedLogs.toLowerCase();
+              const lowerError = data.error ? String(data.error).toLowerCase() : "";
+              if (!maxNoticeShown && ((lowerLogs.includes("maximum") && lowerLogs.includes("result")) || (lowerError.includes("maximum") && lowerError.includes("result")))) {
+                maxNoticeShown = true;
+                showMaxResultsModal();
+              }
+              if (!resp.ok) {
+                if (populateLog && joinedLogs) {
+                  populateLog.textContent = joinedLogs;
+                }
+                throw new Error(data.error || `HTTP ${resp.status}`);
+              }
+              if (populateLog && joinedLogs) {
+                populateLog.textContent = joinedLogs;
+              }
+              if (!maxNoticeShown && joinedLogs.includes("Maximum results")) {
+                maxNoticeShown = true;
+                showMaxResultsModal();
+                appendPopulateLogLine("Maximum number of results reached. Stopping download.");
+              }
+              populateStatus.textContent = "Done. Reloading…";
+              window.location.reload();
+            } catch (err) {
+              populateStatus.textContent = "";
+              const errMsg = err && err.message ? err.message : String(err || "");
+              const lowerErr = errMsg.toLowerCase();
+              if (!maxNoticeShown && lowerErr.includes("maximum") && lowerErr.includes("result")) {
+                maxNoticeShown = true;
+                showMaxResultsModal();
+              }
+              if (populateLog) populateLog.textContent = String(err || "Error");
+              alert(`Populate failed: ${err.message || err}`);
+            } finally {
           if (btn) {
             btn.disabled = false;
             btn.textContent = original || (preloadEmbeds ? "Preload release data" : "Populate");
