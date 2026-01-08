@@ -1509,27 +1509,27 @@
         cursor.setDate(cursor.getDate() + 1);
       }
 
-      const allCached = totalDays > 0 && cachedDays >= totalDays;
+      const allPopulated = totalDays > 0 && cachedDays >= totalDays;
       if (populateLog) {
-        msg = allCached
+        msg = allPopulated
         ? `Selected time period:\n\n${fromVal} to ${toVal}\n\nDate range fully populated. Displaying all releases in this date range.`
         : `Selected time period:\n\n${fromVal} to ${toVal}\n\n${totalDays-cachedDays} of ${totalDays} selected days not yet populated.\n\nClick "Populate release list" to populate all dates in the selected range.`; 
 
         populateLog.innerHTML = msg.replace(/\n/g, "<br>");
-        populateLog.style.color = allCached ? "var(--muted)" : "#64a8ff";
+        populateLog.style.color = allPopulated ? "var(--muted)" : "#64a8ff";
         
         const rangeReleases = releases.filter(r => withinSelectedRange(r) && r.url);
         const hasPreloadableReleases = rangeReleases.some(r => !(r.embed_url && r.description));
-        if (hasPreloadableReleases) {
+        if (allPopulated && hasPreloadableReleases) {
           msg = `\n\n<span style="color:#64a8ff;">For faster browsing, you can click 'Preload release data' to pre-fetch Bandcamp players for releases in this range.</span>`;
           populateLog.innerHTML += msg.replace(/\n/g, "<br>");
         }
       }
 
       if (populateBtn) {
-        populateBtn.disabled = allCached;
-        populateBtn.textContent = allCached ? "Release list populated" : "Populate release list";
-        populateBtn.title = allCached ? "All dates in this range are already cached" : "";
+        populateBtn.disabled = allPopulated;
+        populateBtn.textContent = allPopulated ? "Release list populated" : "Populate release list";
+        populateBtn.title = allPopulated ? "All dates in this range are already cached" : "";
       }
     }
 
