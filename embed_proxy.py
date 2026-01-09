@@ -410,55 +410,6 @@ def reset_caches():
     return _corsify(jsonify({"ok": True, "cleared": cleared, "errors": errors}))
 
 
-@app.route("/populate-range", methods=["POST", "OPTIONS"])
-def populate_range():
-    if request.method == "OPTIONS":
-        return _corsify(app.response_class(status=204))
-    data = request.get_json(silent=True) or {}
-    start_raw = data.get("start") or data.get("from")
-    end_raw = data.get("end") or start_raw
-    max_results = int(data.get("max_results") or MAX_RESULTS_HARD)
-    preload_embeds = _as_bool(data.get("preload_embeds"))
-    if not start_raw or not end_raw:
-        return _corsify(jsonify({"error": "Missing start/end"})), 400
-    start = _parse_date(start_raw)
-    end = _parse_date(end_raw)
-    if not start or not end or start > end:
-        return _corsify(jsonify({"error": "Invalid start/end date"})), 400
-
-    if not _find_credentials_file():
-        return _corsify(jsonify({"error": "Credentials not found. Reload credentials in the settings panel."})), 400
-    if not TOKEN_PATH.exists():
-        return _corsify(jsonify({"error": "Gmail token missing. Reload credentials in the settings panel to re-authenticate."})), 400
-
-    if not POPULATE_LOCK.acquire(blocking=False):
-        return _corsify(jsonify({"error": "Another populate is already running"})), 409
-    logs = []
-
-    def log(msg: str):
-        logs.append(str(msg))
-
-    try:
-        gather_releases_with_cache(
-            start.strftime("%Y/%m/%d"),
-            end.strftime("%Y/%m/%d"),
-            max_results,
-            batch_size=20,
-            log=log,
-        )
-        releases = get_full_release_cache()
-        return _corsify(jsonify({"ok": True, "logs": logs, "count": len(releases)}))
-    except MaxResultsExceeded as exc:
-        logs.append(str(exc))
-        return _corsify(jsonify({"error": str(exc), "logs": logs})), 413
-    except GmailAuthError as exc:
-        return _corsify(jsonify({"error": str(exc), "logs": logs})), 401
-    except Exception as exc:
-        return _corsify(jsonify({"error": str(exc), "logs": logs})), 500
-    finally:
-        POPULATE_LOCK.release()
-
-
 @app.route("/clear-credentials", methods=["POST", "OPTIONS"])
 def clear_credentials():
     if request.method == "OPTIONS":
