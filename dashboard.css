@@ -161,7 +161,7 @@
     }
     .layout {
       display: grid;
-      grid-template-columns: 260px 1fr;
+      grid-template-columns: 360px 1fr;
       gap: 0;
       width: 100%;
       height: calc(100vh - 70px);
