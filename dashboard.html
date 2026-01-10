@@ -486,11 +486,6 @@
     .calendar-day .dot.scraped {
       display: none;
     }
-    .calendar-day .dot.unseen {
-      background: #64a8ff;
-      border-color: rgba(50,120,200,0.6);
-      box-shadow: 0 0 0 1px rgba(100,168,255,0.35);
-    }
     .calendar-day:hover {
       transform: translateY(-1px);
       border-color: rgba(82,208,255,0.6);
@@ -915,7 +910,6 @@
     const serverDownBackdrop = document.getElementById("server-down-backdrop");
     const maxResultsBackdrop = document.getElementById("max-results-backdrop");
     let serverDownShown = false;
-    let serverDownFailures = 0;
     let maxNoticeShown = false;
     let DEFAULT_THEME = "light";
     const populateLog = document.getElementById("populate-log");
@@ -980,29 +974,6 @@
       if (tableWrapper) tableWrapper.style.display = "none";
       const wireframe = document.getElementById("scrape-wireframe");
       if (wireframe) wireframe.style.display = "none";
-    }
-    function renderDateRangeLabel() {
-      const el = document.getElementById("date-range");
-      if (!el || !releases.length) return;
-      const dates = releases
-        .map(r => r.date)
-        .filter(Boolean)
-        .map(d => new Date(d))
-        .filter(d => !isNaN(d.getTime()))
-        .sort((a, b) => a - b);
-      if (!dates.length) {
-        el.textContent = "";
-        return;
-      }
-      const fmt = d => {
-        const y = d.getFullYear();
-        const m = `${d.getMonth() + 1}`.padStart(2, "0");
-        const day = `${d.getDate()}`.padStart(2, "0");
-        return `${y}-${m}-${day}`;
-      };
-      const first = dates[0];
-      const last = dates[dates.length - 1];
-      el.textContent = `Date range: ${fmt(first)} to ${fmt(last)}`;
     }
     async function loadViewedSet() {
       if (!API_ROOT) throw new Error("Proxy not configured");
@@ -1070,7 +1041,6 @@
         });
         clearTimeout(timer);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        serverDownFailures = 0;
       } catch (err) {
         clearTimeout(timer);
         if (!online) {
@@ -1082,7 +1052,6 @@
           // Only count failures for remote hosts if the response was non-OK.
           return;
         }
-        serverDownFailures += 1;
         showServerDownModal();
       }
     }
@@ -1299,81 +1268,12 @@
       return url;
     }
 
-    const HIGHLIGHT_PALETTE = ["#52d0ff", "#ff8b52", "#7cde8c", "#ff6b9f", "#c18fff", "#f2d45c", "#8fd8ff", "#ffa34f"];
-    const labelColorMap = new Map();
-    function colorForLabel(label) {
-      const key = label || "default";
-      if (labelColorMap.has(key)) return labelColorMap.get(key);
-      const color = HIGHLIGHT_PALETTE[labelColorMap.size % HIGHLIGHT_PALETTE.length];
-      labelColorMap.set(key, color);
-      return color;
-    }
-
-    function buildHighlightMap(items) {
-      const map = new Map();
-      items.forEach(entry => {
-        if (!entry.date) return;
-        const dateKey = formatDate(entry.date);
-        if (!dateKey) return;
-        const color = colorForLabel(entry.page_name || entry.artist || "");
-        if (!map.has(dateKey)) map.set(dateKey, new Set());
-        map.get(dateKey).add(color);
-      });
-      return map;
-    }
-
-    const highlightMap = buildHighlightMap(releases);
     let scrapeStatus = { scraped: new Set(), notScraped: new Set() };
 
     function buildEmbedUrl(id, isTrack) {
       if (!id) return null;
       const kind = isTrack ? "track" : "album";
       return `https://bandcamp.com/EmbeddedPlayer/${kind}=${id}/size=large/bgcol=ffffff/linkcol=0687f5/tracklist=true/artwork=small/transparent=true/`;
-    }
-
-    function parseEmbedMeta(htmlText) {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(htmlText, "text/html");
-      const meta = doc.querySelector('meta[name="bc-page-properties"]');
-      if (!meta || !meta.content) return null;
-      try {
-        return JSON.parse(meta.content);
-      } catch (err) {
-        try {
-          return eval(`(${meta.content})`);
-        } catch (e) {
-          return null;
-        }
-      }
-    }
-
-    function parseDescriptionFromHtml(htmlText) {
-      try {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(htmlText, "text/html");
-        const about = doc.querySelector("#tralbum-about, .tralbum-about");
-        const credits = doc.querySelector(".tralbum-credits, #tralbum-credits");
-        const parts = [];
-        const collect = (el) => {
-          if (!el) return "";
-          const txt = (el.textContent || "").replace(/\r\n/g, "\n");
-          const lines = txt.split("\n").map(t => t.trim());
-          const joined = lines.join("\n").replace(/\n(3,)/g, "\n\n");
-          return joined.trim();
-        };
-        const aboutText = collect(about);
-        const creditsText = collect(credits);
-        if (aboutText) parts.push(aboutText);
-        if (creditsText) parts.push(creditsText);
-        if (parts.length) return parts.join("\n\n");
-        const og = doc.querySelector('meta[property="og:description"]');
-        if (og && og.content) return og.content.trim();
-        const desc = doc.querySelector('meta[name="description"]');
-        if (desc && desc.content) return desc.content.trim();
-      } catch (err) {
-        return null;
-      }
-      return null;
     }
 
     async function ensureEmbed(release) {
@@ -1483,7 +1383,6 @@
       syncShowCheckboxAvailability();
     }
 
-    function updateRangePreview() {}
     function updateSelectionStatusLog() {
       let fromVal = state.dateFilterFrom || "";
       let toVal = state.dateFilterTo || "";
@@ -1511,7 +1410,7 @@
 
       const allPopulated = totalDays > 0 && populatedDays >= totalDays;
       if (populateLog) {
-        msg = allPopulated
+        let msg = allPopulated
         ? `Selected time period:\n\n${fromVal} to ${toVal}\n\nDate range fully populated. Displaying all releases in this date range.`
         : `Selected time period:\n\n${fromVal} to ${toVal}\n\n${totalDays-populatedDays} of ${totalDays} selected days not yet populated.\n\nClick "Populate release list" to populate all dates in the selected range.`; 
 
@@ -1632,10 +1531,6 @@
         node.remove();
       });
       document.querySelectorAll("tr.data-row").forEach(row => row.classList.remove("expanded"));
-    }
-
-    function attachRowActions(row, release) {
-      // no-op; buttons removed
     }
 
     function createDetailRow(release) {
@@ -1875,7 +1770,6 @@
         tr.addEventListener("focus", schedulePreload);
         tr.addEventListener("blur", cancelPreload);
 
-        attachRowActions(tr, release);
         tbody.appendChild(tr);
       });
       refreshSortIndicators();
@@ -1917,8 +1811,6 @@
     const settingsBtn = document.getElementById("settings-btn");
     const settingsClose = document.getElementById("settings-close");
     const settingsReset = document.getElementById("settings-reset");
-    const resetClearCache = null;
-    const resetClearViewed = null;
     const hideViewedBtn = document.getElementById("hide-viewed-btn");
     const showStarredBtn = document.getElementById("show-starred-btn");
     const markSeenBtn = document.getElementById("mark-seen");
@@ -1926,14 +1818,13 @@
     const dateFilterFrom = document.getElementById("date-filter-from");
     const dateFilterTo = document.getElementById("date-filter-to");
     const showCachedToggle = document.getElementById("show-cached-toggle");
-    const wireframePanel = document.getElementById("scrape-wireframe");
-    const wireframeBody = document.getElementById("scrape-wireframe-body");
+    const scrapePanel = document.getElementById("scrape-wireframe");
+    const scrapePanelBody = document.getElementById("scrape-wireframe-body");
     const calendarRange = document.getElementById("calendar-range");
     const calendarRangeMonth = document.getElementById("calendar-range-month");
     const populateBtn = document.getElementById("populate-range");
     const preloadBtn = document.getElementById("preload-range");
     const selectMonthBtn = document.getElementById("select-month-btn");
-    const populateStatus = document.createElement("div");
     const CALENDAR_STATE_KEY = "bc_calendar_state_v1";
     // Reset load credentials button when settings panel is toggled
     const resetLoadCredsBtn = () => {
@@ -2343,8 +2234,6 @@
         btn.disabled = true;
         btn.textContent = preloadEmbeds ? "Preloading…" : "Populating…";
       }
-      populateStatus.textContent = "";
-
           async function runPopulate() {
             if (!window.EventSource) {
               alert("Populate requires EventSource support. Please use a modern browser.");
@@ -2368,7 +2257,6 @@
               const current = populateLog ? populateLog.textContent : "";
               const next = current ? `${current}\n${msg}` : msg;
               if (populateLog) populateLog.textContent = next;
-              populateStatus.textContent = "";
               alert(msg);
               if (btn) {
                 btn.disabled = false;
@@ -2391,7 +2279,6 @@
             };
             es.addEventListener("error", handleError);
             es.addEventListener("done", () => {
-              populateStatus.textContent = "Done. Reloading…";
               es.close();
               window.location.reload();
             });
@@ -2448,11 +2335,6 @@
         btn.disabled = false;
         btn.textContent = original || "Preload release data";
       }
-      if (total === 0) {
-        populateStatus.textContent = "Nothing to preload.";
-      } else {
-        populateStatus.textContent = "Preload done.";
-      }
       renderTable();
     }
 
@@ -2482,7 +2364,6 @@
         dateFilterTo.value = toKey;
       }
       onDateFilterChange();
-      updateRangePreview();
       updateSelectionStatusLog();
     }
 
@@ -2533,10 +2414,10 @@
       } catch (err) {}
     }
 
-    if (wireframePanel && wireframeBody) {
-      wireframeBody.hidden = !wireframePanel.open;
-      wireframePanel.addEventListener("toggle", () => {
-        wireframeBody.hidden = !wireframePanel.open;
+    if (scrapePanel && scrapePanelBody) {
+      scrapePanelBody.hidden = !scrapePanel.open;
+      scrapePanel.addEventListener("toggle", () => {
+        scrapePanelBody.hidden = !scrapePanel.open;
       });
     }
 
@@ -2545,7 +2426,6 @@
       state.dateFilterTo = dateFilterTo ? dateFilterTo.value.trim() : "";
       syncCalendarsFromInputs();
       renderCalendar("range");
-      updateRangePreview();
       updateSelectionStatusLog();
       updateHeaderRange();
       persistCalendarState();
@@ -2570,7 +2450,6 @@
         state.viewed = viewed || new Set();
         state.starred = starred || new Set();
         setDefaultDateFilters();
-        renderDateRangeLabel();
         renderTable();
         renderCalendar("range");
         refreshToggleButtons();
