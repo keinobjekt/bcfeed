@@ -5,14 +5,10 @@ date pickers and a built-in embed proxy.
 
 from __future__ import annotations
 
-import argparse
 import threading
 import webbrowser
 import sys
-import json
-import shutil
-from pathlib import Path
-from tkinter import Tk, Button, Frame, messagebox, filedialog, ttk
+from tkinter import Tk, Frame, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
 from server import start_server
@@ -29,16 +25,14 @@ def find_free_port(preferred: int = 5050) -> int:
         except OSError:
             s.bind(("", 0))
             return s.getsockname()[1]
-OUTPUT_DIR = Path("output")
-
 def start_server_thread():
     port = find_free_port(SERVER_PORT)
     server, thread = start_server(port)
     return server, thread, port
 
-def launch_dashboard(server_port: int, *, log=print, launch_browser: bool = True, clear_status_on_load: bool = False):
+def launch_dashboard(server_port: int, *, launch_browser: bool = True):
     """
-    Start the proxy and open the static dashboard, which will load releases from the proxy.
+    Start the server and open the static dashboard, which will load releases from the server.
     """
     if launch_browser:
         webbrowser.open_new_tab(f"http://localhost:{server_port}/dashboard")
@@ -52,16 +46,6 @@ def main():
     style = ttk.Style(root)
     style.configure("Run.TButton", padding=(8, 4))
     style.configure("Action.TButton", padding=(8, 4))
-
-    def adjust_date(var: StringVar, is_start: bool, delta: datetime.timedelta):
-        if not can_adjust(is_start, delta):
-            return
-        current = parse_date_var(var, today if is_start else two_months_ago)
-        new_date = current + delta
-        # clamp to today
-        if new_date > today:
-            new_date = today
-        var.set(new_date.strftime("%Y-%m-%d"))
 
     server_thread = None
     server_instance = None
@@ -125,15 +109,17 @@ def main():
                 sys.stdout = logger
 
                 log(f"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-                log(f"Launching dashboard from cache...")
+                log(f"Launching bcfeed...")
                 log(f"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
                 log(f"")
-                log(f"Building page from cached releases (server port {server_port})...")
+                log(f"Server port: {server_port}")
 
                 try:
-                    launch_dashboard(server_port, log=log, launch_browser=True, clear_status_on_load=True)
-                    log("Dashboard generated from cache and opened in browser.")
+                    launch_dashboard(server_port, launch_browser=True)
+                    log("Dashboard generated.")
+                    log("Keep the app running while using bcfeed in your browser. Click 'Launch' to open the dashboard again if needed.")
                     log("")
+                    
                 finally:
                     sys.stdout = original_stdout
             except Exception as exc:
@@ -142,7 +128,6 @@ def main():
 
         threading.Thread(target=worker, daemon=True).start()
             
-    from tkinter import Checkbutton  # localized import to avoid polluting top
     def on_close():
         nonlocal server_instance, server_thread
         try:
