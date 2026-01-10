@@ -35,7 +35,7 @@
                 </div>
               </div>
               <div class="calendar-grid" id="calendar-range"></div>
-              <div style="font-size:12px; color:var(--muted); text-align:left; margin-top:auto; padding-left:4px; display:flex; flex-direction:column; gap:2px;">
+              <div style="font-size:12px; color:var(--muted); text-align:left; margin-top:auto; padding-left:4px; display:flex; flex-direction:column; gap:8px;">
                 <span style="letter-spacing:0.3px;">SHIFT-CLICK TO SELECT RANGE</span>
                 <span style="display:grid; grid-template-columns:18px 1fr; align-items:center; gap:6px; margin-top:2px;">
                   <span style="display:inline-block; width:14px; height:14px; border-radius:999px; background:rgba(100,168,255,0.28);"></span>
@@ -43,11 +43,11 @@
                   <span style="display:inline-block; width:6px; height:6px; border-radius:999px; background:#ff5f5f; border:1px solid rgba(0,0,0,0.25); margin-left:2px;"></span>
                   <span>Unseen</span>
                 </span>
+                <button id="select-month-btn" class="button" style="background:var(--panel); border:1px solid var(--border); color:var(--text); padding:6px 10px; font-size:12px; line-height:1; align-self:flex-start;">Select entire month</button>
               </div>
             </div>
             <div class="calendar-card" style="min-height:100%; display:flex; flex-direction:column; gap:8px;">
               <div style="display:grid; gap:8px;">
-                <button id="select-month-btn" class="button" style="background:var(--panel); border:1px solid var(--border); color:var(--text); padding:6px 10px; font-size:12px; line-height:1; margin-bottom:16px;">Select entire month</button>
                 <div style="font-size:12px; color:var(--muted);">SELECTED DATE RANGE:</div>
                 <button id="populate-range" class="button" style="background:rgba(100,168,255,0.35); border-color:rgba(100,168,255,0.6); color:#fff;">Populate release list</button>
                 <button id="preload-range" class="button">Preload release data</button>
