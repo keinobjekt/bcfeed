@@ -3,25 +3,23 @@ Session and release metadata persistence utilities.
 
 Stores Gmail-scraped release metadata (not Bandcamp-enriched) keyed by
 release date so we can reuse it across runs and avoid re-downloading
-messages for dates we've already processed.
+messages for dates we've already processed. Also persists empty-date
+ranges and scrape status for the same date buckets.
 """
 
 from __future__ import annotations
 
-import json
 import datetime
+import json
 from pathlib import Path
 from typing import Dict, Iterable, List, Set, Tuple
 
-from paths import get_data_dir
+from paths import EMPTY_DATES_PATH, RELEASE_CACHE_PATH, SCRAPE_STATUS_PATH
 
 CacheType = Dict[str, List[dict]]
 
-DATA_ROOT = get_data_dir()
-CACHE_PATH = DATA_ROOT / "release_cache.json"
-EMPTY_PATH = DATA_ROOT / "no_results_dates.json"
-EMBED_CACHE_PATH = DATA_ROOT / "embed_cache.json"
-SCRAPE_STATUS_PATH = DATA_ROOT / "scrape_status.json"
+CACHE_PATH = RELEASE_CACHE_PATH
+EMPTY_PATH = EMPTY_DATES_PATH
 
 
 def _ensure_cache_dir() -> None:
@@ -51,81 +49,52 @@ def _save_cache(cache: CacheType) -> None:
     tmp_path.replace(CACHE_PATH)
 
 
-def _load_embed_cache() -> Dict[str, dict]:
+def _load_date_set(path: Path) -> Set[datetime.date]:
     _ensure_cache_dir()
-    if not EMBED_CACHE_PATH.exists():
-        return {}
+    if not path.exists():
+        return set()
     try:
-        with open(EMBED_CACHE_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, dict) else {}
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+            dates = set()
+            for item in raw if isinstance(raw, list) else []:
+                day = _to_date(item)
+                if day:
+                    dates.add(day)
+            return dates
     except Exception:
-        return {}
+        return set()
 
 
-def _save_embed_cache(cache: Dict[str, dict]) -> None:
+def _save_date_set(path: Path, dates: Set[datetime.date], *, drop_today: bool = False) -> None:
     _ensure_cache_dir()
-    tmp_path = EMBED_CACHE_PATH.with_suffix(".tmp")
+    tmp_path = path.with_suffix(".tmp")
+    if drop_today:
+        today = datetime.date.today()
+        # Always treat today as not-scraped.
+        if today in dates:
+            dates = set(dates)
+            dates.discard(today)
+    payload = sorted(day.isoformat() for day in dates)
     with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(cache, f, indent=2)
-    tmp_path.replace(EMBED_CACHE_PATH)
+        json.dump(payload, f, indent=2)
+    tmp_path.replace(path)
 
 
 def _load_empty_dates() -> Set[datetime.date]:
-    _ensure_cache_dir()
-    if not EMPTY_PATH.exists():
-        return set()
-    try:
-        with open(EMPTY_PATH, "r", encoding="utf-8") as f:
-            raw = json.load(f)
-            dates = set()
-            for item in raw if isinstance(raw, list) else []:
-                day = _to_date(item)
-                if day:
-                    dates.add(day)
-            return dates
-    except Exception:
-        return set()
+    return _load_date_set(EMPTY_PATH)
 
 
 def _load_scrape_status() -> Set[datetime.date]:
-    _ensure_cache_dir()
-    if not SCRAPE_STATUS_PATH.exists():
-        return set()
-    try:
-        with open(SCRAPE_STATUS_PATH, "r", encoding="utf-8") as f:
-            raw = json.load(f)
-            dates = set()
-            for item in raw if isinstance(raw, list) else []:
-                day = _to_date(item)
-                if day:
-                    dates.add(day)
-            return dates
-    except Exception:
-        return set()
+    return _load_date_set(SCRAPE_STATUS_PATH)
 
 
 def _save_scrape_status(dates: Set[datetime.date]) -> None:
-    _ensure_cache_dir()
-    tmp_path = SCRAPE_STATUS_PATH.with_suffix(".tmp")
-    today = datetime.date.today()
-    # Always treat today as not-scraped.
-    if today in dates:
-        dates = set(dates)
-        dates.discard(today)
-    payload = sorted(day.isoformat() for day in dates)
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
-    tmp_path.replace(SCRAPE_STATUS_PATH)
+    _save_date_set(SCRAPE_STATUS_PATH, dates, drop_today=True)
 
 
 def _save_empty_dates(dates: Set[datetime.date]) -> None:
-    _ensure_cache_dir()
-    tmp_path = EMPTY_PATH.with_suffix(".tmp")
-    payload = sorted(day.isoformat() for day in dates)
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
-    tmp_path.replace(EMPTY_PATH)
+    _save_date_set(EMPTY_PATH, dates)
 
 
 def _to_date(val) -> datetime.date | None:
@@ -314,35 +283,3 @@ def persist_empty_date_range(start: datetime.date, end: datetime.date, *, exclud
         cursor += one_day
     _save_empty_dates(empty_dates)
     mark_date_range_scraped(start, end, exclude_today=exclude_today)
-
-
-# --------------------------------------------------------------------------- #
-# Embed metadata cache (Bandcamp embed info)
-
-def load_embed_cache() -> Dict[str, dict]:
-    """Return the cached embed metadata keyed by release URL."""
-    return _load_embed_cache()
-
-
-def persist_embed_metadata(url: str, *, release_id=None, is_track=None, embed_url=None) -> None:
-    """
-    Save embed metadata for a Bandcamp release URL to avoid refetching later.
-    """
-    if not url:
-        return
-    cache = _load_embed_cache()
-    existing = cache.get(url, {})
-    merged = {
-        "release_id": existing.get("release_id"),
-        "is_track": existing.get("is_track"),
-        "embed_url": existing.get("embed_url"),
-    }
-    if release_id is not None:
-        merged["release_id"] = release_id
-    if is_track is not None:
-        merged["is_track"] = is_track
-    if embed_url is not None:
-        merged["embed_url"] = embed_url
-    cache[url] = merged
-    _save_embed_cache(cache)
-    return merged
