@@ -143,13 +143,3 @@ Publishing the app to **In Production** fixes this.
 
 **I get a 403 or insufficient permissions error.**  
 Make sure you enabled the Gmail API and used the downloaded OAuth file.
-
-
-
-## 🛠️ Build / Packaging
-
-(noted here more for my own reference, for now)
-
-- Run `scripts/build_mac_app.sh` from the repo root to produce `dist/bcfeed.app` (and a zipped copy if `ditto` is available). The script creates an isolated `.venv-build`, installs `requirements-build.txt`, and invokes `pyinstaller --clean --noconfirm bcfeed.spec`.
-- Artifacts land in `dist/`; delete that folder before re-running if you want a clean output.
-- Run `xattr -r -d com.apple.quarantine dist/bcfeed.app` to clear the MacOS quarantine, otherwise loading time will be really long. 
