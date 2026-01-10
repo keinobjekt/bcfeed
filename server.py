@@ -508,8 +508,3 @@ def populate_range_stream():
         "Cache-Control": "no-cache",
     }
     return Response(stream_with_context(event_stream()), mimetype="text/event-stream", headers=headers)
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5050))
-    app.run(host="0.0.0.0", port=port, threaded=True)
