@@ -5,30 +5,16 @@ date pickers and a built-in embed proxy.
 
 from __future__ import annotations
 
+import sys
 import threading
 import webbrowser
-import sys
 from tkinter import Tk, Frame, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
-from server import start_server
+from server import start_server_thread
 
 SERVER_PORT = 5050
 
-
-def find_free_port(preferred: int = 5050) -> int:
-    import socket
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.bind(("", preferred))
-            return preferred
-        except OSError:
-            s.bind(("", 0))
-            return s.getsockname()[1]
-def start_server_thread():
-    port = find_free_port(SERVER_PORT)
-    server, thread = start_server(port)
-    return server, thread, port
 
 def launch_dashboard(server_port: int, *, launch_browser: bool = True):
     """
@@ -95,7 +81,7 @@ def main():
     def _ensure_server():
         nonlocal server_thread, server_port, server_instance
         if server_thread is None or not server_thread.is_alive():
-            server_instance, server_thread, server_port = start_server_thread()
+            server_instance, server_thread, server_port = start_server_thread(SERVER_PORT)
         return server_port
 
     def on_launch():

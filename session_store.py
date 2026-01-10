@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Set, Tuple
 
 from paths import EMPTY_DATES_PATH, RELEASE_CACHE_PATH, SCRAPE_STATUS_PATH
+from util import dedupe_by_url
 
 CacheType = Dict[str, List[dict]]
 
@@ -112,19 +113,6 @@ def _to_date(val) -> datetime.date | None:
     return None
 
 
-def _dedupe_by_url(items: Iterable[dict]) -> List[dict]:
-    seen = set()
-    deduped = []
-    for item in items:
-        url = item.get("url")
-        if url and url in seen:
-            continue
-        if url:
-            seen.add(url)
-        deduped.append(item)
-    return deduped
-
-
 def get_full_release_cache() -> List[dict]:
     """
     Return all cached release metadata, flattened across all dates.
@@ -135,7 +123,7 @@ def get_full_release_cache() -> List[dict]:
         day_entries = cache.get(day) or []
         if isinstance(day_entries, list):
             all_items.extend(day_entries)
-    return _dedupe_by_url(all_items)
+    return dedupe_by_url(all_items)
 
 
 def mark_dates_scraped(dates: Iterable[datetime.date], *, exclude_today: bool = True) -> None:
@@ -212,7 +200,7 @@ def persist_release_metadata(releases: Iterable[dict], *, exclude_today: bool = 
         key = day.isoformat()
         existing = cache.get(key, [])
         # avoid duplicates for the same day by URL
-        combined = _dedupe_by_url([*existing, release])
+        combined = dedupe_by_url([*existing, release])
         cache[key] = combined
         scraped_days.add(day)
         # if we now have data for a day that was previously marked empty, clear that marker
@@ -246,7 +234,7 @@ def cached_releases_for_range(start: datetime.date, end: datetime.date) -> Tuple
         elif cursor not in scraped_dates:
             missing.append(cursor)
         cursor += one_day
-    return _dedupe_by_url(cached), missing
+    return dedupe_by_url(cached), missing
 
 
 def collapse_date_ranges(dates: List[datetime.date]) -> List[Tuple[datetime.date, datetime.date]]:

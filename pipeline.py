@@ -1,10 +1,9 @@
-import datetime
 from typing import Dict, Iterable, Tuple
+import datetime
 
 from gmail import gmail_authenticate, search_messages, get_messages, scrape_info_from_email
-from util import construct_release, parse_date
+from util import construct_release, parse_date, dedupe_by_date, dedupe_by_url
 from session_store import (
-    _dedupe_by_url,
     cached_releases_for_range,
     collapse_date_ranges,
     persist_empty_date_range,
@@ -18,36 +17,6 @@ class MaxResultsExceeded(Exception):
         super().__init__(f"Exceeded maximum number of results per Gmail search (max={max_results}, num results={found})")
         self.max_results = max_results
         self.found = found
-
-
-def _dedupe_by_date(items: Iterable[dict], *, keep: str = "last") -> list[dict]:
-    """Deduplicate by URL, keeping the first/last entry based on release date."""
-    if keep not in {"first", "last"}:
-        raise ValueError("keep must be 'first' or 'last'")
-
-    kept: dict[str, tuple[datetime.date, dict]] = {}
-    without_url: list[dict] = []
-
-    for item in items:
-        url = item.get("url")
-        if not url:
-            without_url.append(item)
-            continue
-        date = parse_date(item.get("date"))
-        if url not in kept:
-            kept[url] = (date, item)
-            continue
-        existing_date, _ = kept[url]
-        if keep == "last":
-            replace = date >= existing_date
-        else:
-            replace = date <= existing_date
-        if replace:
-            kept[url] = (date, item)
-
-    deduped = [item for _, item in kept.values()]
-    deduped.extend(without_url)
-    return deduped
 
 
 def construct_release_list(emails: Dict, *, log=print) -> list[dict]:
@@ -82,7 +51,7 @@ def construct_release_list(emails: Dict, *, log=print) -> list[dict]:
     # Sift releases with identical urls
     if log:
         log("Checking for releases with identical URLS...")
-    releases = _dedupe_by_url(releases_unsifted)
+    releases = dedupe_by_url(releases_unsifted)
 
     return releases
 
@@ -145,7 +114,7 @@ def populate_release_cache(after_date: str, before_date: str, max_results: int, 
         mark_date_range_scraped(start_missing, end_missing, exclude_today=True)
 
     # Deduplicate on URL after combining cached + new
-    deduped = _dedupe_by_date(releases, keep="last")
+    deduped = dedupe_by_date(releases, keep="last")
 
     log("")
     log(f"Loaded {len(deduped)} unique releases including cache.")
