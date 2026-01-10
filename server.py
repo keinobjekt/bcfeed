@@ -2,7 +2,7 @@
 bcfeed proxy to fetch Bandcamp release metadata and embed URLs to avoid CORS in the browser.
 
 Run locally:
-    python embed_proxy.py
+    python server.py
 
 Then configure the dashboard to use the proxy, e.g. embed_proxy_url="http://localhost:5000/embed-meta".
 """

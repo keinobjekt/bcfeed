@@ -15,7 +15,7 @@ from pathlib import Path
 from tkinter import Tk, Button, Frame, messagebox, filedialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
-from embed_proxy import app as proxy_app, start_proxy_server
+from server import app as proxy_app, start_proxy_server
 from util import get_data_dir
 from gmail import k_gmail_credentials_file, k_gmail_token_file
 
