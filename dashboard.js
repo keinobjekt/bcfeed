@@ -257,6 +257,7 @@
       expandedKey: null,
       dateFilterFrom: "",
       dateFilterTo: "",
+      filterByDate: true,
       showCachedBadges: true,
     };
     let lastLabelSignature = "";
@@ -545,6 +546,16 @@
         populateBtn.textContent = allPopulated ? "Release list populated" : "Populate release list";
         populateBtn.title = allPopulated ? "All dates in this range are already populated" : "";
       }
+    }
+
+    function updateStatusForDateFilter() {
+      if (!populateLog) return;
+      if (!state.filterByDate) {
+        populateLog.textContent = "Showing all populated releases (only from previously downloaded date ranges).";
+        populateLog.scrollTop = populateLog.scrollHeight;
+        return;
+      }
+      updateSelectionStatusLog();
     }
 
     function updateHeaderRange(count = null) {
@@ -932,6 +943,7 @@
     const markUnseenBtn = document.getElementById("mark-unseen");
     const dateFilterFrom = document.getElementById("date-filter-from");
     const dateFilterTo = document.getElementById("date-filter-to");
+    const filterByDateToggle = document.getElementById("filter-by-date");
     const showCachedToggle = document.getElementById("show-cached-toggle");
     const scrapePanel = document.getElementById("scrape-wireframe");
     const scrapePanelBody = document.getElementById("scrape-wireframe-body");
@@ -1116,6 +1128,7 @@
     }
 
     function withinSelectedRange(release) {
+      if (!state.filterByDate) return true;
       let fromVal = state.dateFilterFrom || "";
       let toVal = state.dateFilterTo || "";
       if (fromVal && !toVal) toVal = fromVal;
@@ -1489,7 +1502,7 @@
         dateFilterTo.value = toKey;
       }
       onDateFilterChange();
-      updateSelectionStatusLog();
+      updateStatusForDateFilter();
     }
 
     async function fetchScrapeStatus() {
@@ -1507,7 +1520,7 @@
         const notScraped = data.not_scraped || data["not_scraped"] || [];
         scrapeStatus.notScraped = new Set(notScraped || []);
         renderCalendar("range");
-        updateSelectionStatusLog();
+        updateStatusForDateFilter();
         updateHeaderRange();
       } catch (err) {
         console.warn("Failed to load scrape status", err);
@@ -1596,13 +1609,27 @@
       state.dateFilterTo = dateFilterTo ? dateFilterTo.value.trim() : "";
       syncCalendarsFromInputs();
       renderCalendar("range");
-      updateSelectionStatusLog();
+      updateStatusForDateFilter();
       updateHeaderRange();
       persistCalendarState();
       renderTable();
     }
     if (dateFilterFrom) dateFilterFrom.addEventListener("input", onDateFilterChange);
     if (dateFilterTo) dateFilterTo.addEventListener("input", onDateFilterChange);
+    const updateDateFilterUi = () => {
+      if (!scrapePanel) return;
+      scrapePanel.classList.toggle("calendar-disabled", !state.filterByDate);
+    };
+    if (filterByDateToggle) {
+      filterByDateToggle.checked = state.filterByDate;
+      updateDateFilterUi();
+      filterByDateToggle.addEventListener("change", () => {
+        state.filterByDate = !!filterByDateToggle.checked;
+        updateDateFilterUi();
+        renderTable();
+        updateStatusForDateFilter();
+      });
+    }
 
     initializeCalendars();
     loadCalendarState();

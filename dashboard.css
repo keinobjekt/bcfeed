@@ -183,6 +183,12 @@
       text-transform: uppercase;
       margin-bottom: 10px;
     }
+    .filter-by-date-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+    }
     .filter-list {
       display: grid;
       gap: 4px;
@@ -258,6 +264,38 @@
     .wireframe-panel.open {
       border-style: solid;
       box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+    }
+    .wireframe-panel.calendar-disabled {
+      position: relative;
+    }
+    .wireframe-panel.calendar-disabled::after {
+      content: "";
+      position: absolute;
+      inset: 10px 12px;
+      border-radius: calc(var(--radius) - 2px);
+      background: repeating-linear-gradient(
+        135deg,
+        rgba(255,255,255,0.08),
+        rgba(255,255,255,0.08) 8px,
+        rgba(0,0,0,0.16) 8px,
+        rgba(0,0,0,0.16) 16px
+      );
+      pointer-events: none;
+      z-index: 2;
+    }
+    .wireframe-panel.calendar-disabled .wireframe-body {
+      visibility: hidden;
+    }
+    .wireframe-panel.calendar-disabled .wireframe-title {
+      visibility: hidden;
+    }
+    .wireframe-panel.calendar-disabled .wireframe-carat {
+      visibility: hidden;
+    }
+    .wireframe-panel.calendar-disabled .calendar-grid,
+    .wireframe-panel.calendar-disabled .calendar-nav button,
+    .wireframe-panel.calendar-disabled .calendar-today-btn {
+      pointer-events: none;
     }
     .wireframe-panel > summary {
       list-style: none;
