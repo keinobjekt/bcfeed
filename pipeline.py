@@ -86,7 +86,7 @@ def populate_release_cache(after_date: str, before_date: str, max_results: int, 
     for start_missing, end_missing in missing_ranges:
         query_after = start_missing.strftime("%Y-%m-%d")
         query_before = (end_missing+datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-        search_query = f"from:noreply@bandcamp.com subject:'New release from' before:{query_before} after:{query_after}"
+        search_query = f"from:noreply@bandcamp.com subject:(New release from) before:{query_before} after:{query_after}"
         log("")
         log(f"Querying Gmail for {query_after} to {query_before}...")
         try:
