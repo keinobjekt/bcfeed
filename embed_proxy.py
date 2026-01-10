@@ -26,7 +26,7 @@ from werkzeug.serving import make_server, WSGIRequestHandler
 
 from util import get_data_dir
 from session_store import scrape_status_for_range, get_full_release_cache
-from pipeline import gather_releases_with_cache, MaxResultsExceeded
+from pipeline import populate_release_cache, MaxResultsExceeded
 from gmail import _find_credentials_file, GmailAuthError, gmail_authenticate, k_gmail_credentials_file, k_gmail_token_file
 
 app = Flask(__name__)
@@ -506,7 +506,7 @@ def populate_range_stream():
 
         def worker():
             try:
-                gather_releases_with_cache(
+                populate_release_cache(
                     start.strftime("%Y/%m/%d"),
                     end.strftime("%Y/%m/%d"),
                     max_results,

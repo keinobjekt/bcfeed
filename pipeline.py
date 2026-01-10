@@ -97,7 +97,7 @@ def construct_release_list(emails: Dict, *, log=print) -> list[dict]:
     return releases
 
 
-def gather_releases_with_cache(after_date: str, before_date: str, max_results: int, batch_size: int, cache_only: bool = False, log=print) -> None:
+def populate_release_cache(after_date: str, before_date: str, max_results: int, batch_size: int, log=print) -> None:
     """
     Use cached Gmail-scraped release metadata for previously seen dates.
     Only hit Gmail for dates in the requested range that have no cache entry.
@@ -111,61 +111,54 @@ def gather_releases_with_cache(after_date: str, before_date: str, max_results: i
     missing_ranges: Iterable[Tuple[datetime.date, datetime.date]] = collapse_date_ranges(missing_dates)
     releases = list(cached_releases)
 
-    if cache_only:
-        log(f"Cache-only mode enabled; skipping Gmail fetches. Cached releases available: {len(releases)}.")
-        missing_ranges = []
-    elif missing_ranges:
+    if missing_ranges:
         log("The following date ranges will be downloaded from Gmail:")
         for start_missing, end_missing in missing_ranges:
             log(f"  {start_missing} to {end_missing}")
     else:
         log(f"This date range has already been scraped; no Gmail download needed.")
 
-    if not cache_only:
+    try:
+        service = gmail_authenticate()
+    except Exception as exc:
+        log(f"ERROR: {exc}")
+        raise
+
+    for start_missing, end_missing in missing_ranges:
+        query_after = start_missing.strftime("%Y/%m/%d")
+        query_before = (end_missing+datetime.timedelta(days=1)).strftime("%Y/%m/%d")
+        search_query = f"from:noreply@bandcamp.com subject:'New release from' before:{query_before} after:{query_after}"
+        log("")
+        log(f"Querying Gmail for {query_after} to {query_before}...")
         try:
-            service = gmail_authenticate()
+            message_ids = search_messages(service, search_query)
+            # Enforce max_results limit explicitly so callers can surface the condition.
+            if max_results and len(message_ids) > max_results:
+                raise MaxResultsExceeded(max_results, len(message_ids))
         except Exception as exc:
             log(f"ERROR: {exc}")
             raise
-
-        for start_missing, end_missing in missing_ranges:
-            query_after = start_missing.strftime("%Y/%m/%d")
-            query_before = (end_missing+datetime.timedelta(days=1)).strftime("%Y/%m/%d")
-            search_query = f"from:noreply@bandcamp.com subject:'New release from' before:{query_before} after:{query_after}"
-            log("")
-            log(f"Querying Gmail for {query_after} to {query_before}...")
-            try:
-                message_ids = search_messages(service, search_query)
-                # Enforce max_results limit explicitly so callers can surface the condition.
-                if max_results and len(message_ids) > max_results:
-                    raise MaxResultsExceeded(max_results, len(message_ids))
-            except Exception as exc:
-                log(f"ERROR: {exc}")
-                raise
-            if not message_ids:
-                log(f"No messages found for {query_after} to {query_before}")
-                persist_empty_date_range(start_missing, end_missing, exclude_today=True)
-                continue
-            log(f"Found {len(message_ids)} messages for {query_after} to {query_before}")
-            try:
-                emails = get_messages(service, [msg["id"] for msg in message_ids], "full", batch_size, log=log)
-            except Exception as exc:
-                log(f"ERROR: {exc}")
-                raise
-            new_releases = construct_release_list(emails, log=log)
-            log(f"Parsed {len(new_releases)} releases from Gmail for {query_after} to {query_before}.")
-            releases.extend(new_releases)
-            # Mark the entire queried span as scraped so we do not re-fetch it.
-            mark_date_range_scraped(start_missing, end_missing, exclude_today=True)
+        if not message_ids:
+            log(f"No messages found for {query_after} to {query_before}")
+            persist_empty_date_range(start_missing, end_missing, exclude_today=True)
+            continue
+        log(f"Found {len(message_ids)} messages for {query_after} to {query_before}")
+        try:
+            emails = get_messages(service, [msg["id"] for msg in message_ids], "full", batch_size, log=log)
+        except Exception as exc:
+            log(f"ERROR: {exc}")
+            raise
+        new_releases = construct_release_list(emails, log=log)
+        log(f"Parsed {len(new_releases)} releases from Gmail for {query_after} to {query_before}.")
+        releases.extend(new_releases)
+        # Mark the entire queried span as scraped so we do not re-fetch it.
+        mark_date_range_scraped(start_missing, end_missing, exclude_today=True)
 
     # Deduplicate on URL after combining cached + new
     deduped = _dedupe_by_date(releases, keep="last")
 
     log("")
-    if cache_only:
-        log(f"Loaded {len(deduped)} unique releases from cache).")
-    else:
-        log(f"Loaded {len(deduped)} unique releases including cache.")
+    log(f"Loaded {len(deduped)} unique releases including cache.")
 
     # Always persist the run results when a page will be generated, so cache is up to date.
     persist_release_metadata(deduped, exclude_today=True)
