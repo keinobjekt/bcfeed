@@ -942,6 +942,8 @@
     const populateBtn = document.getElementById("populate-range");
     const preloadBtn = document.getElementById("preload-range");
     const selectMonthBtn = document.getElementById("select-month-btn");
+    const statusLogCard = document.querySelector(".calendar-log");
+    const statusToggleBtn = document.getElementById("status-toggle");
     const CALENDAR_STATE_KEY = "bc_calendar_state_v1";
     // Reset load credentials button when settings panel is toggled
     const resetLoadCredsBtn = () => {
@@ -1535,6 +1537,15 @@
       scrapePanelBody.hidden = !scrapePanel.open;
       scrapePanel.addEventListener("toggle", () => {
         scrapePanelBody.hidden = !scrapePanel.open;
+      });
+    }
+
+    if (statusLogCard && statusToggleBtn) {
+      statusLogCard.classList.remove("collapsed");
+      statusToggleBtn.setAttribute("aria-expanded", "true");
+      statusToggleBtn.addEventListener("click", () => {
+        const isCollapsed = statusLogCard.classList.toggle("collapsed");
+        statusToggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
       });
     }
 
