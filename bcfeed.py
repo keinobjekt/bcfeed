@@ -15,15 +15,9 @@ from pathlib import Path
 from tkinter import Tk, Button, Frame, messagebox, filedialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
-from server import app as proxy_app, start_server
-from paths import get_data_dir, GMAIL_CREDENTIALS_FILE, GMAIL_TOKEN_FILE
+from server import start_server
 
-MULTITHREADING = True
-PROXY_PORT = 5050
-DATA_DIR = get_data_dir()
-SETTINGS_PATH = DATA_DIR / "gui_settings.json"
-CREDENTIALS_PATH = DATA_DIR / GMAIL_CREDENTIALS_FILE
-TOKEN_PATH = DATA_DIR / GMAIL_TOKEN_FILE
+SERVER_PORT = 5050
 
 
 def find_free_port(preferred: int = 5050) -> int:
@@ -37,17 +31,17 @@ def find_free_port(preferred: int = 5050) -> int:
             return s.getsockname()[1]
 OUTPUT_DIR = Path("output")
 
-def start_proxy_thread():
-    port = find_free_port(PROXY_PORT)
+def start_server_thread():
+    port = find_free_port(SERVER_PORT)
     server, thread = start_server(port)
     return server, thread, port
 
-def launch_from_cache(proxy_port: int, *, log=print, launch_browser: bool = True, clear_status_on_load: bool = False):
+def launch_dashboard(server_port: int, *, log=print, launch_browser: bool = True, clear_status_on_load: bool = False):
     """
     Start the proxy and open the static dashboard, which will load releases from the proxy.
     """
     if launch_browser:
-        webbrowser.open_new_tab(f"http://localhost:{proxy_port}/dashboard")
+        webbrowser.open_new_tab(f"http://localhost:{server_port}/dashboard")
     return None
 
 
@@ -69,9 +63,9 @@ def main():
             new_date = today
         var.set(new_date.strftime("%Y-%m-%d"))
 
-    proxy_thread = None
-    proxy_server = None
-    proxy_port = PROXY_PORT
+    server_thread = None
+    server_instance = None
+    server_port = SERVER_PORT
 
     # Toggle defaults and actions
 
@@ -114,15 +108,15 @@ def main():
         # marshal to UI thread
         root.after(0, append_log, msg)
 
-    def _ensure_proxy():
-        nonlocal proxy_thread, proxy_port
-        if proxy_thread is None or not proxy_thread.is_alive():
-            proxy_server, proxy_thread, proxy_port = start_proxy_thread()
-        return proxy_port
+    def _ensure_server():
+        nonlocal server_thread, server_port, server_instance
+        if server_thread is None or not server_thread.is_alive():
+            server_instance, server_thread, server_port = start_server_thread()
+        return server_port
 
     def on_launch():
-        nonlocal proxy_thread, proxy_port
-        _ensure_proxy()
+        nonlocal server_thread, server_port
+        _ensure_server()
 
         def worker():
             try:
@@ -134,10 +128,10 @@ def main():
                 log(f"Launching dashboard from cache...")
                 log(f"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
                 log(f"")
-                log(f"Building page from cached releases (proxy port {proxy_port})...")
+                log(f"Building page from cached releases (server port {server_port})...")
 
                 try:
-                    launch_from_cache(proxy_port, log=log, launch_browser=True, clear_status_on_load=True)
+                    launch_dashboard(server_port, log=log, launch_browser=True, clear_status_on_load=True)
                     log("Dashboard generated from cache and opened in browser.")
                     log("")
                 finally:
@@ -146,19 +140,16 @@ def main():
                 log(f"Error: {exc}")
                 root.after(0, lambda exc=exc: messagebox.showerror("Error", str(exc)))
 
-        if MULTITHREADING:
-            threading.Thread(target=worker, daemon=True).start()
-        else:
-            worker()
+        threading.Thread(target=worker, daemon=True).start()
             
     from tkinter import Checkbutton  # localized import to avoid polluting top
     def on_close():
-        nonlocal proxy_server, proxy_thread
+        nonlocal server_instance, server_thread
         try:
-            if proxy_server:
-                proxy_server.shutdown()
-            if proxy_thread and proxy_thread.is_alive():
-                proxy_thread.join(timeout=1)
+            if server_instance:
+                server_instance.shutdown()
+            if server_thread and server_thread.is_alive():
+                server_thread.join(timeout=1)
         finally:
             root.destroy()
 
