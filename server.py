@@ -359,7 +359,10 @@ def setup_doc():
     if not SETUP_PATH.exists():
         return _corsify(jsonify({"error": f"SETUP.md not found at {SETUP_PATH}"})), 500
     markdown_text = SETUP_PATH.read_text(encoding="utf-8")
-    body = _render_setup_html(markdown_text)
+    try:
+        body = _render_setup_html(markdown_text)
+    except Exception:
+        body = f"<pre>{html.escape(markdown_text)}</pre>"
     doc = f"""<!doctype html>
 <html lang="en">
 <head>
