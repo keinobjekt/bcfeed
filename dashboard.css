@@ -759,7 +759,8 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 18px;
-      min-width: 320px;
+      min-width: 280px;
+      max-width: 360px;
       box-shadow: var(--shadow);
       display: grid;
       gap: 12px;
