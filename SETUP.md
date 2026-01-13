@@ -1,27 +1,61 @@
-### bcfeed
+# bcfeed
 
-A macOS/desktop app that reads Bandcamp release emails from your Gmail, caches them locally, and generates an interactive dashboard of releases that is much faster to browse than Bandcamp itself. 
+A macOS desktop app that reads Bandcamp release emails from your Gmail, caches them locally, and generates an interactive dashboard of releases that is much easier to browse.
 
 
-## Running
+## Python setup (for power users)
 
-If you're familiar with Python and CLI tools, you can simply create a virtual environment, install the dependencies and run the script from the CLI:
+If you're familiar with Python and CLI tools, simply create a virtual environment, install the dependencies and run the script from the CLI:
 
-- Ensure Python 3.14.2 is installed, along with virtualenv and pip
-- In the project directory, run `virtualenv --python 3.14.2 .venv`
-- Run `source ./.venv/bin/activate`
+- Ensure Python 3.11 or newer is installed and selected as the local python version
+- In the project directory, run `virtualenv .venv`
+- Run `source .venv/bin/activate`
+- Download dependencies: `pip install -r requirements.txt`
 - Run `python3 bcfeed.py`
 
-Alternatively, you can download the **bcfeed** executable from GitHub; note, however, that this suffers from long startup times because it's not notarized and codesigned.
 
-## Dashboard HTML
+## Python setup (beginners' walkthrough)
 
-- The UI shell served by the proxy is the static file `dashboard.html`. The proxy exposes it at `/dashboard` (e.g., http://localhost:5050/dashboard).
-- At runtime the page fetches `config.json` from the proxy to learn the embed proxy URL and flags.
-- Edit `dashboard.html` directly to change the UI; the template helper has been removed.
+1. Download and unzip the **bcfeed** source code into your Documents folder. Make sure the folder is called **bcfeed**.
+2. Download and install **homebrew**: https://brew.sh/
+3. Use Homebrew to install **Pyenv**. **Pyenv*** lets you easily select the right Python version:
+  - Open a Terminal window and type `brew install pyenv`
+4. Install Python 3.11:
+  - In Terminal, type `pyenv install 3.11`
+5. Tell Pyenv to use Python 3.11 for **bcfeed**:
+  - In Terminal, navigate to the **bcfeed** directory: type `cd ~/Documents/bcfeed`
+  - Type `pyenv local 3.11`
+6. Install Virtualenv. This allows you to set up a virtual environment – an isolated directory containing all the packages bcfeed needs to run. 
+  - Type `pip install virtualenv`
+7. Create a virtual environment in the bcfeed folder.
+  - Type `virtualenv .venv`
+8. Activate the virtual environment you just created.
+  - Type `source .venv/bin/activate`
+9. Install the Python dependencies required by **bcfeed** to run.
+  - Type `pip install -r requirements.txt`
+10. You should now be ready to run **bcfeed**:
+  - Type `python3 bcfeed.py`
 
 
-## 📘 Setup Guide
+
+## Running bcfeed
+
+Once the Python setup has been completed you can run **bcfeed** with much fewer steps in future:
+
+1. Open a Terminal window
+2. Navigate to the **bcfeed** directory:
+   `cd ~/Documents/bcfeed`
+3. Activate the virtual environment:
+   `source .venv/bin/activate`
+4. Run the app:
+   `python3 bcfeed.py`
+
+This will launch the server app, which in turn will open the dashboard in your web browser.
+
+You must keep the server app running in order to use **bcfeed**.
+
+
+## 📘 Gmail Setup Guide
 
 This application uses the Gmail API.
 To keep your data private and avoid Google’s OAuth verification requirements, **you must create your own Google Cloud OAuth client**.
@@ -29,7 +63,7 @@ This setup is required only once and takes a few minutes.
 
 ---
 
-# 1. Create a Google Cloud Project
+### 1. Create a Google Cloud Project
 
 1. Open: https://console.cloud.google.com/projectcreate  
 2. Sign in with the Gmail account you use for Bandcamp.
@@ -38,14 +72,14 @@ This setup is required only once and takes a few minutes.
 
 ---
 
-# 2. Enable the Gmail API
+### 2. Enable the Gmail API
 
 1. Go to: https://console.cloud.google.com/apis/library/gmail.googleapis.com  
 2. Click **Enable**
 
 ---
 
-# 3. Configure the OAuth Consent Screen
+### 3. Configure the OAuth Consent Screen
 
 1. Go to: https://console.cloud.google.com/auth/overview?project=bcfeed  
 2. Click **Get Started** to configure Google Auth Platform
@@ -66,7 +100,7 @@ This setup is required only once and takes a few minutes.
 
 ---
 
-# 4. Add Gmail read-only API scope
+### 4. Add Gmail read-only API scope
 
 This allows the app to read your Gmail messages.
 
@@ -81,7 +115,7 @@ This allows the app to read your Gmail messages.
 
 ---
 
-# 5. Publish the App ("In Production")
+### 5. Publish the App ("In Production")
 
 Publishing allows Google to issue long-lived refresh tokens for your personal use.
 
@@ -95,7 +129,7 @@ Since this OAuth client is used **only by you**, verification is **not required*
 
 ---
 
-# 6. Create OAuth Client Credentials (Desktop App)
+### 6. Create OAuth Client Credentials (Desktop App)
 
 1. Go to: https://console.cloud.google.com/apis/credentials  
 2. Click **Create Credentials → OAuth client ID**  
@@ -110,7 +144,7 @@ You will import this file into the application.
 
 ---
 
-# 7. Use the Credentials in This Application
+### 7. Use the Credentials in This Application
 
 1. Open this application  
 2. When prompted, select the downloaded `client_secret_XXXX.json` file  
@@ -121,7 +155,7 @@ You will import this file into the application.
 
 ---
 
-# Important small print
+## Important small print
 
 - These credentials are **for your personal use only**. Do **not** share them.  
 - The app is not a public OAuth client because **you** own and control the credentials.  
@@ -132,7 +166,7 @@ You will import this file into the application.
 
 ---
 
-# Troubleshooting
+## Troubleshooting
 
 **I see an “unverified app” warning.**  
 This is normal. Click **Continue**. The warning appears because only verified apps remove it, but personal-use apps do not require verification.
