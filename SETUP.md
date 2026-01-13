@@ -50,9 +50,9 @@ Once the Python setup has been completed you can run **bcfeed** with much fewer 
 4) Run the app:
    - `python3 bcfeed.py`
 
-This will launch the server app, which in turn will open the dashboard in your web browser.
+This will launch the server from the CLI and open the dashboard in your web browser.
 
-You must keep the server app running in order to use **bcfeed**.
+You must keep the CLI process running in order to use **bcfeed**.
 
 
 ## 📘 Gmail Setup Guide
