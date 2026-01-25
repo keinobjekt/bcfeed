@@ -73,6 +73,7 @@
       border: 1px solid var(--border);
       background: rgba(255, 255, 255, 0.04);
       color: var(--text);
+      text-decoration: none;
       cursor: pointer;
       transition: all 0.12s ease;
       font-weight: 600;

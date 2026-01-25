@@ -32,7 +32,9 @@ from paths import (
     DASHBOARD_PATH,
     DASHBOARD_CSS_PATH,
     DASHBOARD_JS_PATH,
+    README_PATH,
     SETUP_PATH,
+    GMAIL_SETUP_PATH,
 )
 from session_store import scrape_status_for_range, get_full_release_cache
 from pipeline import populate_release_cache, MaxResultsExceeded
@@ -54,6 +56,18 @@ def _format_setup_inline(text: str) -> str:
         else:
             escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
             escaped = re.sub(r"\*(.+?)\*", r"<em>\1</em>", escaped)
+            def _link_rewrite(match: re.Match) -> str:
+                label = match.group(1)
+                href = match.group(2)
+                link_map = {
+                    "SETUP.md": "setup",
+                    "GMAIL_SETUP.md": "setup-gmail",
+                    "README.md": "readme",
+                }
+                href = link_map.get(href, href)
+                return f'<a href="{href}" target="_blank" rel="noopener">{label}</a>'
+
+            escaped = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _link_rewrite, escaped)
             escaped = re.sub(
                 r"(https?://[\w./?&#=%:+~-]+)",
                 r'<a href="\1" target="_blank" rel="noopener">\1</a>',
@@ -356,11 +370,10 @@ def dashboard_js():
     return send_file(DASHBOARD_JS_PATH, mimetype="application/javascript")
 
 
-@app.route("/setup", methods=["GET"])
-def setup_doc():
-    if not SETUP_PATH.exists():
-        return _corsify(jsonify({"error": f"GMAIL_SETUP.md not found at {SETUP_PATH}"})), 500
-    markdown_text = SETUP_PATH.read_text(encoding="utf-8")
+def _serve_markdown_doc(path: Path, title: str) -> Response:
+    if not path.exists():
+        return _corsify(jsonify({"error": f"{path.name} not found at {path}"})), 500
+    markdown_text = path.read_text(encoding="utf-8")
     try:
         body = _render_setup_html(markdown_text)
     except Exception:
@@ -370,29 +383,29 @@ def setup_doc():
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>bcfeed setup</title>
+  <title>{title}</title>
   <style>
     :root {{
-      color-scheme: light dark;
+      color-scheme: dark;
     }}
     body {{
       margin: 0;
       padding: 40px 20px 70px;
       font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
-      background: radial-gradient(circle at 10% 10%, rgba(31,122,255,0.08), transparent 45%),
-                  radial-gradient(circle at 90% 0%, rgba(255,171,64,0.08), transparent 40%),
-                  #f7f8fb;
-      color: #0a0f1a;
+      background: radial-gradient(circle at 10% 10%, rgba(85,140,255,0.2), transparent 45%),
+                  radial-gradient(circle at 90% 0%, rgba(255,170,80,0.15), transparent 40%),
+                  #0c0f16;
+      color: #f2f4fb;
       line-height: 1.7;
     }}
     .wrap {{
       max-width: 900px;
       margin: 0 auto;
-      background: #ffffff;
-      border: 1px solid #d9e2ef;
+      background: #141924;
+      border: 1px solid rgba(255,255,255,0.08);
       border-radius: 16px;
       padding: 34px 32px 42px;
-      box-shadow: 0 20px 45px rgba(15, 17, 22, 0.1);
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
     }}
     h1, h2, h3, h4, h5, h6 {{
       margin: 24px 0 12px;
@@ -400,16 +413,17 @@ def setup_doc():
     }}
     h1 {{ font-size: 30px; letter-spacing: 0.2px; }}
     h2 {{ font-size: 22px; border-left: 3px solid #1f7aff; padding-left: 10px; }}
-    h3 {{ font-size: 18px; color: #1f1f2e; }}
+    h3 {{ font-size: 18px; color: #e7ebf7; }}
     p {{ margin: 12px 0; }}
     ul, ol {{ margin: 10px 0 16px 22px; }}
     li {{ margin: 6px 0; }}
     code {{
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      background: #f1f4f8;
+      background: rgba(255,255,255,0.08);
       padding: 2px 5px;
       border-radius: 6px;
       font-size: 0.95em;
+      color: #f2f6ff;
     }}
     pre {{
       background: #0f1116;
@@ -424,11 +438,11 @@ def setup_doc():
       padding: 0;
       color: inherit;
     }}
-    a {{ color: #1f7aff; text-decoration: none; border-bottom: 1px solid rgba(31,122,255,0.3); }}
-    a:hover {{ border-bottom-color: rgba(31,122,255,0.8); }}
+    a {{ color: #7db0ff; text-decoration: none; border-bottom: 1px solid rgba(125,176,255,0.35); }}
+    a:hover {{ border-bottom-color: rgba(125,176,255,0.85); }}
     hr {{
       border: none;
-      border-top: 1px solid #e3e8f2;
+      border-top: 1px solid rgba(255,255,255,0.12);
       margin: 22px 0;
     }}
   </style>
@@ -440,6 +454,21 @@ def setup_doc():
 </body>
 </html>"""
     return Response(doc, mimetype="text/html")
+
+
+@app.route("/setup", methods=["GET"])
+def setup_doc():
+    return _serve_markdown_doc(SETUP_PATH, "bcfeed setup")
+
+
+@app.route("/setup-gmail", methods=["GET"])
+def setup_gmail_doc():
+    return _serve_markdown_doc(GMAIL_SETUP_PATH, "bcfeed gmail setup")
+
+
+@app.route("/readme", methods=["GET"])
+def readme_doc():
+    return _serve_markdown_doc(README_PATH, "bcfeed README")
 
 
 @app.route("/embed-meta", methods=["GET", "OPTIONS"])

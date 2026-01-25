@@ -55,7 +55,7 @@ This application uses the Gmail API.
 To keep your data private and avoid Google’s OAuth verification requirements, **you must create your own Google Cloud OAuth client**.
 This setup is required only once and takes a few minutes.
 
-Instructions on how to do this can be found in [GMAIL_SETUP.md].
+Instructions on how to do this can be found in [GMAIL_SETUP.md](GMAIL_SETUP.md).
 
 ---
 

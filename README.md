@@ -1,12 +1,15 @@
 # bcfeed
 
+## Introduction
+
 **bcfeed** is a Python app that generates a dashboard of recent releases from Bandcamp pages you're subscribed to. It allows for a much more streamlined browsing experience than either the Bandcamp feed or going through your Gmail inbox.
 
 It works by searching your Gmail inbox within a given date range for any "New release from..." emails from Bandcamp, then populating a *local* database of new releases. It then serves this database to a browser interface.
 
+
 ## Setup
 
-See [SETUP.md]
+See [SETUP.md](SETUP.md)
 
 
 ## Typical workflow
@@ -17,29 +20,31 @@ You can either preload an entire date range – which is exhaustive but takes so
 
 **A typical workflow would be:**
 
-- **Select a date range to populate (e.g. the whole of last December)**. 
-- **Click "Populate release list"**. This searches your Gmail inbox for Bandcamp release notifications within the specified date range and populates the database with their basic metadata (artist, title, bandcamp page, URL).
-- Now you can either:
+1) **Select a date range to populate (e.g. the whole of last December)**. 
+2) **Click "Populate release list"**. This searches your Gmail inbox for Bandcamp release notifications within the specified date range and populates the database with their basic metadata (artist, title, bandcamp page, URL).
+3) Now you can either:
   - **Browse straight away** - this works, but releases may load slowly
-or
+    or
   - **Click "Preload release data" and then browse** – this preloads the release text and BC player widget for all releases in the date range for faster browsing. May take a while for larger date ranges.
-or
+    or
   - **"Star" the releases you're interested in, then browse the starred releases** - starring a release preloads it behind the scenes, and clicking "Show only: Starred" at the top right will filter starred releases for a given date range.
-- Once you've browsed that date range, mark all the releases as "Seen" (in the left panel).
+4) Once you've browsed that date range, mark all the releases as "Seen" (in the left panel).
 
 
 ## Notes
 
-- Once you've populated (or browsed) a date range from your inbox once, you don't have to do it again. Date ranges in the calendar widget correspond to the date the Bandcamp notification email was received.
-- Releases with preloaded release data and player widgets are marked with a blue "CACHED" badge.
-- The Settings panel at the top right allows you to reset the cache and load/clear your Gmail credentials.
+Once you've populated (or browsed) a date range from your inbox once, you don't have to do it again. Date ranges in the calendar widget correspond to the date the Bandcamp notification email was received.
+
+Releases with preloaded release data and player widgets are marked with a blue "CACHED" badge.
+
+The Settings panel at the top right allows you to reset the cache and load/clear your Gmail credentials.
 
 
 ## Requirements
 
-- **bcfeed** has only been tested on OS X 13.4 and Chrome. It probably works on other OS X versions. It may or may not work on other browsers. It probably won't work on Windows, but feel free to try.
+**bcfeed** has only been tested on OS X 13.4 and Chrome. It probably works on other OS X versions. It may or may not work on other browsers. It probably won't work on Windows, but feel free to try.
 
-- You need a Gmail account – though IMAP support is in the works.
+You need a Gmail account – though IMAP support is in the works.
 
 
 ## Privacy
