@@ -1167,6 +1167,14 @@
       return `${y}-${m}-${d}`;
     }
 
+    function getLastSelectableDate() {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const lastSelectable = new Date(today);
+      lastSelectable.setDate(today.getDate() - 1);
+      return lastSelectable;
+    }
+
     function parseDateString(value) {
       const normalized = normalizeDateString(value);
       if (!normalized) return null;
@@ -1220,8 +1228,7 @@
       const monthStart = new Date(cal.current.getFullYear(), cal.current.getMonth(), 1);
       const startOffset = monthStart.getDay();
       const totalCells = 42; // 6 weeks
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const lastSelectable = getLastSelectableDate();
       const startSelectedDate = cal.startKey ? parseDateString(cal.startKey) : null;
       const endSelectedDate = cal.endKey ? parseDateString(cal.endKey) : null;
 
@@ -1232,7 +1239,7 @@
         const key = isoKeyFromDate(cellDate);
         const cell = document.createElement("div");
         cell.className = "calendar-day";
-        let isDisabled = cellDate > today;
+        let isDisabled = cellDate > lastSelectable;
         if (isOtherMonth) cell.classList.add("other-month");
         if (isDisabled) cell.classList.add("disabled");
         if (cal.startKey === key || cal.endKey === key) cell.classList.add("selected");
@@ -1365,14 +1372,14 @@
       btn.addEventListener("click", () => {
         const cal = calendars.range;
         if (!cal) return;
-        const today = new Date();
-        const todayKey = isoKeyFromDate(today);
-        cal.current = new Date(today.getFullYear(), today.getMonth(), 1);
+        const lastSelectable = getLastSelectableDate();
+        const lastKey = isoKeyFromDate(lastSelectable);
+        cal.current = new Date(lastSelectable.getFullYear(), lastSelectable.getMonth(), 1);
         if (!cal.startKey || (cal.startKey && cal.endKey)) {
-          cal.startKey = todayKey;
+          cal.startKey = lastKey;
           cal.endKey = null;
         } else {
-          cal.endKey = todayKey;
+          cal.endKey = lastKey;
         }
         renderCalendar("range");
         applyCalendarFiltersFromSelection();
@@ -1383,14 +1390,18 @@
       const cal = calendars.range;
       if (!cal) return;
       const current = cal.current || new Date();
-      const year = current.getFullYear();
-      const month = current.getMonth();
-      const startDate = new Date(year, month, 1);
-      const endDate = new Date(year, month + 1, 0);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (today.getFullYear() === year && today.getMonth() === month) {
-        endDate.setTime(today.getTime());
+      const lastSelectable = getLastSelectableDate();
+      let year = current.getFullYear();
+      let month = current.getMonth();
+      let startDate = new Date(year, month, 1);
+      if (lastSelectable < startDate) {
+        year = lastSelectable.getFullYear();
+        month = lastSelectable.getMonth();
+        startDate = new Date(year, month, 1);
+      }
+      let endDate = new Date(year, month + 1, 0);
+      if (lastSelectable.getFullYear() === year && lastSelectable.getMonth() === month && lastSelectable < endDate) {
+        endDate = new Date(lastSelectable);
       }
       cal.startKey = isoKeyFromDate(startDate);
       cal.endKey = isoKeyFromDate(endDate);
