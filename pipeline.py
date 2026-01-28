@@ -26,6 +26,7 @@ def construct_release_list(emails: Dict, *, log=print) -> list[dict]:
     if log:
         log("Parsing messages...")
     releases_unsifted = []
+    skipped = 0
     for _msg_id, email in emails.items():
         # Handle both EmailMessage objects and legacy dict format
         if hasattr(email, 'html'):
@@ -44,9 +45,19 @@ def construct_release_list(emails: Dict, *, log=print) -> list[dict]:
             date = None
             subject = ""
 
-        img_url, release_url, is_track, artist_name, release_title, page_name = scrape_info_from_email(
-            html_text, subject
-        )
+        if not html_text:
+            skipped += 1
+            continue
+
+        try:
+            img_url, release_url, is_track, artist_name, release_title, page_name = scrape_info_from_email(
+                html_text, subject
+            )
+        except Exception as exc:
+            skipped += 1
+            if log:
+                log(f"Warning: failed to parse one message: {exc}")
+            continue
 
         if not all(x is None for x in [date, img_url, release_url, is_track, artist_name, release_title, page_name]):
             releases_unsifted.append(
@@ -64,6 +75,8 @@ def construct_release_list(emails: Dict, *, log=print) -> list[dict]:
     # Sift releases with identical urls
     if log:
         log("Checking for releases with identical URLS...")
+        if skipped:
+            log(f"Skipped {skipped} message(s) due to parse errors.")
     releases = dedupe_by_url(releases_unsifted)
 
     return releases

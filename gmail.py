@@ -214,12 +214,15 @@ def scrape_info_from_email(email_text, subject=None):
     except:
         s = str(s)
 
+    if not s or s.lower() == "none":
+        return None, None, None, None, None, None
+
     # Only accept messages whose subject starts with the expected release prefix.
     if subject and not subject.lower().startswith("new release from"):
         return None, None, None, None, None, None
     
     # release url
-    soup = BeautifulSoup(email_text, "html.parser") if email_text else None
+    soup = BeautifulSoup(s, "html.parser")
     release_url = None
 
     def _find_bandcamp_release_url() -> str | None:
