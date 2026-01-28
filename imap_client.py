@@ -75,7 +75,7 @@ class ImapClient:
             if "authentication" in error_msg.lower() or "login" in error_msg.lower():
                 raise AuthenticationError(
                     "IMAP login failed. Check username and password. "
-                    f"For Gmail/iCloud/Outlook, use an app-specific password. ({exc})"
+                    f"Some providers require an app-specific password for IMAP access; check your provider's documentation. ({exc})"
                 )
             raise AuthenticationError(f"IMAP error: {exc}")
         except (OSError, TimeoutError) as exc:

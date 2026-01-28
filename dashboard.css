@@ -836,3 +836,167 @@
       header { position: static; }
       .detail-card { padding: 12px; }
     }
+
+    /* Enhanced Settings Panel Styles */
+    .settings-panel {
+      width: 100%;
+      max-width: 540px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    
+    .settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    .settings-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+    
+    .settings-header .button {
+      padding: 6px 10px;
+      font-size: 14px;
+      line-height: 1;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+    }
+    .settings-header .button:hover {
+        background: rgba(255,255,255,0.05);
+        color: var(--text);
+    }
+
+    .settings-content-scroll {
+        padding: 24px;
+        overflow-y: auto;
+        max-height: 75vh;
+    }
+
+    .settings-section {
+      margin-bottom: 28px;
+      padding-bottom: 28px;
+      border-bottom: 1px solid var(--border);
+    }
+    .settings-section:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+
+    .settings-section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .settings-group {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .form-input, .form-select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .form-input:focus, .form-select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(82, 208, 255, 0.15);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      color: var(--text);
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    
+    .help-text {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 6px;
+        line-height: 1.4;
+    }
+
+    .provider-panel {
+        margin-top: 16px;
+        border-radius: var(--radius);
+        background: var(--row-bg);
+        border: 1px solid var(--border);
+        padding: 20px;
+    }
+    
+    .imap-config-panel {
+      display: flex; 
+      flex-direction: column; 
+      gap: 16px;
+    }
+
+    .settings-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 8px;
+    }
+
+    .settings-actions .button {
+      font-size: 13px;
+      padding: 8px 14px;
+      font-weight: 500;
+    }
+    
+    .button.primary {
+        background: var(--accent);
+        color: var(--bg);
+        border-color: var(--accent);
+    }
+    .button.primary:hover {
+        filter: brightness(1.1);
+    }
+    
+    .button.danger {
+        color: #ff6b6b;
+        border-color: rgba(255, 107, 107, 0.3);
+        background: rgba(255, 107, 107, 0.05);
+        font-weight: 500;
+    }
+    .button.danger:hover {
+        background: rgba(255, 107, 107, 0.12);
+        border-color: #ff6b6b;
+    }
+    
+    .settings-row label {
+      font-size: 14px;
+      user-select: none;
+    }
