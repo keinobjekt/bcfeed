@@ -1,7 +1,7 @@
 from typing import Dict, Iterable, Tuple
 import datetime
 
-from gmail import scrape_info_from_email
+from bandcamp_email_parser import parse_release_email
 from provider_factory import create_provider, get_current_provider_type
 from email_provider import AuthenticationError, SearchQuery
 from util import construct_release, parse_date, dedupe_by_date, dedupe_by_url
@@ -50,7 +50,7 @@ def construct_release_list(emails: Dict, *, log=print) -> list[dict]:
             continue
 
         try:
-            img_url, release_url, is_track, artist_name, release_title, page_name = scrape_info_from_email(
+            img_url, release_url, is_track, artist_name, release_title, page_name = parse_release_email(
                 html_text, subject
             )
         except Exception as exc:

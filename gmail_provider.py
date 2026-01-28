@@ -15,7 +15,7 @@ from email_provider import (
     AuthenticationError,
     ProviderError,
 )
-from gmail import (
+from gmail_client import (
     gmail_authenticate,
     search_messages,
     get_messages,
