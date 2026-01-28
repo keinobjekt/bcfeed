@@ -59,6 +59,11 @@ def construct_release_list(emails: Dict, *, log=print) -> list[dict]:
                 log(f"Warning: failed to parse one message: {exc}")
             continue
 
+        # Only keep emails we could match to a Bandcamp release URL.
+        if not release_url:
+            skipped += 1
+            continue
+
         if not all(x is None for x in [date, img_url, release_url, is_track, artist_name, release_title, page_name]):
             releases_unsifted.append(
                 construct_release(
