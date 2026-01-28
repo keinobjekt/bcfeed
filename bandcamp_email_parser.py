@@ -29,8 +29,11 @@ def parse_release_email(email_html: str | bytes | None, subject: str | None = No
     if not s or s.lower() == "none":
         return None, None, None, None, None, None
 
+    subject_text = (subject or "").strip()
     # Only accept messages whose subject starts with the expected release prefix.
-    if subject and not subject.lower().startswith("new release from"):
+    # If we can't read the subject, treat it as non-release to avoid misclassifying
+    # other Bandcamp emails (orders, merch, etc.).
+    if not subject_text or not subject_text.lower().startswith("new release from"):
         return None, None, None, None, None, None
 
     soup = BeautifulSoup(s, "html.parser")
