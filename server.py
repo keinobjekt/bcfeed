@@ -7,6 +7,7 @@ from __future__ import annotations
 import datetime
 import html
 import json
+import os
 import re
 import socket
 import threading
@@ -38,7 +39,9 @@ from paths import (
 )
 from session_store import scrape_status_for_range, get_full_release_cache
 from pipeline import populate_release_cache, MaxResultsExceeded
-from gmail import _find_credentials_file, GmailAuthError, gmail_authenticate
+from gmail_client import _find_credentials_file, GmailAuthError, gmail_authenticate
+from provider_factory import load_provider_config, save_provider_config, get_current_provider_type
+from email_provider import AuthenticationError, ProviderError
 
 app = Flask(__name__)
 
@@ -169,7 +172,6 @@ def _save_set(path: Path, items: set[str]) -> None:
     try:
         tmp.replace(path)
     except FileNotFoundError:
-        # If the temp file vanished between write and replace, fall back to writing directly.
         path.write_text(json.dumps(sorted(items)), encoding="utf-8")
 
 
@@ -233,6 +235,7 @@ def health():
     if request.method == "OPTIONS":
         return _corsify(app.response_class(status=204))
     return _corsify(jsonify({"ok": True}))
+
 
 # Suppress noisy logging for health checks
 class QuietHealthHandler(WSGIRequestHandler):
@@ -336,13 +339,34 @@ def starred_state():
     return _corsify(jsonify({"ok": True}))
 
 
+def _has_credentials_for_provider() -> bool:
+    """Check if credentials are configured for the current provider type."""
+    provider_type = get_current_provider_type()
+
+    if provider_type == "gmail":
+        # Gmail requires both credentials file and token
+        return _find_credentials_file() is not None and TOKEN_PATH.exists()
+    elif provider_type == "imap":
+        # IMAP requires host, username, and password in config
+        config = load_provider_config()
+        imap_cfg = config.get("imap_config", {})
+        return bool(
+            imap_cfg.get("host", "").strip()
+            and imap_cfg.get("username", "").strip()
+            and imap_cfg.get("password", "")
+        )
+    return False
+
+
 @app.route("/config.json", methods=["GET"])
 def config_json():
     embed_proxy_url = request.host_url.rstrip("/") + "/embed-meta"
+    has_credentials = _has_credentials_for_provider()
     payload = {
         "title": "bcfeed",
         "embed_proxy_url": embed_proxy_url,
         "has_token": TOKEN_PATH.exists(),
+        "has_credentials": has_credentials,
         "default_theme": "light",
         "clear_status_on_load": False,
         "show_dev_settings": False,
@@ -557,6 +581,7 @@ def populate_range_stream():
     start_arg = request.args.get("start") or request.args.get("from")
     end_arg = request.args.get("end") or start_arg
     max_results = int(request.args.get("max_results") or GMAIL_MAX_RESULTS_HARD)
+
     def error_stream(msg: str):
         def gen():
             yield f"event: error\ndata: {msg}\n\n"
@@ -564,7 +589,6 @@ def populate_range_stream():
             "Access-Control-Allow-Origin": "*",
             "Cache-Control": "no-cache",
         }
-        # Also emit a one-line log-friendly version for browser status box
         app.logger.error(msg)
         return Response(stream_with_context(gen()), mimetype="text/event-stream", headers=headers)
 
@@ -574,10 +598,18 @@ def populate_range_stream():
     end = parse_date(end_arg, allow_none=True)
     if not start or not end or start > end:
         return error_stream("Invalid start/end")
-    if not _find_credentials_file():
-        return error_stream("Credentials not found. Reload credentials in the settings panel.")
-    if not TOKEN_PATH.exists():
-        return error_stream("Gmail token missing. Reload credentials in the settings panel to re-authenticate.")
+
+    # Check credentials based on provider type
+    provider_type = get_current_provider_type()
+    if provider_type == "gmail":
+        if not _find_credentials_file():
+            return error_stream("Gmail credentials not found. Reload credentials in the settings panel.")
+        if not TOKEN_PATH.exists():
+            return error_stream("Gmail token missing. Reload credentials in the settings panel to re-authenticate.")
+    elif provider_type == "imap":
+        # Check IMAP credentials
+        if not _has_credentials_for_provider():
+            return error_stream("IMAP credentials not configured. Please configure IMAP settings (host, username, password) in the settings panel.")
 
     if not POPULATE_LOCK.acquire(blocking=False):
         return error_stream("Another populate is already running")
@@ -602,6 +634,10 @@ def populate_range_stream():
                 q.put(f"ERROR: {exc}")
             except MaxResultsExceeded as exc:
                 q.put(f"Maximum results reached ({exc.found}/{exc.max_results}).")
+            except (AuthenticationError, ProviderError) as exc:
+                q.put(f"ERROR: {exc}")
+            except Exception as exc:
+                q.put(f"ERROR: Unexpected error: {exc}")
             finally:
                 q.put(None)
 
@@ -624,3 +660,60 @@ def populate_range_stream():
         "Cache-Control": "no-cache",
     }
     return Response(stream_with_context(event_stream()), mimetype="text/event-stream", headers=headers)
+
+
+# ---------------------------------------------------------------------------
+# Provider configuration endpoints
+
+
+@app.route("/provider-config", methods=["GET", "POST", "OPTIONS"])
+def provider_config():
+    """Get or update the email provider configuration."""
+    if request.method == "OPTIONS":
+        return _corsify(app.response_class(status=204))
+
+    if request.method == "GET":
+        config = load_provider_config()
+        # Don't expose password in GET response
+        imap_cfg = config.get("imap_config", {})
+        safe_config = {
+            "provider": config.get("provider", "gmail"),
+            "imap_config": {
+                "host": imap_cfg.get("host", ""),
+                "port": imap_cfg.get("port", 993),
+                "username": imap_cfg.get("username", ""),
+                "folder": imap_cfg.get("folder", "INBOX"),
+                "use_ssl": imap_cfg.get("use_ssl", True),
+                "has_password": bool(imap_cfg.get("password")),
+            },
+            "has_gmail_credentials": CREDENTIALS_PATH.exists(),
+        }
+        return _corsify(jsonify(safe_config))
+
+    # POST: Save config
+    data = request.get_json(silent=True) or {}
+    config = load_provider_config()
+
+    if "provider" in data:
+        config["provider"] = data["provider"]
+
+    if "imap_config" in data:
+        imap = data["imap_config"]
+        existing_imap = config.get("imap_config", {})
+        config["imap_config"] = {
+            "host": imap.get("host", existing_imap.get("host", "")),
+            "port": imap.get("port", existing_imap.get("port", 993)),
+            "username": imap.get("username", existing_imap.get("username", "")),
+            # Only update password if provided (not empty)
+            "password": imap.get("password") or existing_imap.get("password", ""),
+            "folder": imap.get("folder", existing_imap.get("folder", "INBOX")),
+            "use_ssl": imap.get("use_ssl", existing_imap.get("use_ssl", True)),
+        }
+
+    save_provider_config(config)
+    return _corsify(jsonify({"ok": True}))
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5050))
+    app.run(host="0.0.0.0", port=port, threaded=True)
