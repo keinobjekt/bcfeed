@@ -60,7 +60,10 @@
     if (config && typeof config.show_dev_settings !== "undefined") {
       showDevSettings = asBool(config.show_dev_settings);
     }
-    if (config && typeof config.has_token !== "undefined") {
+    if (config && typeof config.has_credentials !== "undefined") {
+      missingToken = !asBool(config.has_credentials);
+    } else if (config && typeof config.has_token !== "undefined") {
+      // Fallback for backward compatibility
       missingToken = !asBool(config.has_token);
     }
     const loadingState = document.getElementById("loading-state");
@@ -1698,6 +1701,116 @@
     loadCalendarState();
     setTimeout(() => checkServerAlive(), 500);
     setInterval(() => checkServerAlive(), 5000);
+
+    // -------------------------------------------------------------------------
+    // Provider configuration (IMAP/Gmail)
+    const providerSelect = document.getElementById("provider-select");
+    const imapConfig = document.getElementById("imap-config");
+    const imapHost = document.getElementById("imap-host");
+    const imapPort = document.getElementById("imap-port");
+    const imapUser = document.getElementById("imap-user");
+    const imapPass = document.getElementById("imap-pass");
+    const imapFolder = document.getElementById("imap-folder");
+    const imapSsl = document.getElementById("imap-ssl");
+    const imapSave = document.getElementById("imap-save");
+    const imapStatus = document.getElementById("imap-status");
+
+    function updateImapConfigVisibility() {
+      if (imapConfig) {
+        imapConfig.style.display = providerSelect && providerSelect.value === "imap" ? "block" : "none";
+      }
+    }
+
+    async function loadProviderConfig() {
+      if (!apiRoot) return;
+      try {
+        const resp = await fetch(`${apiRoot}/provider-config`);
+        if (!resp.ok) return;
+        const config = await resp.json();
+        if (providerSelect) {
+          providerSelect.value = config.provider || "gmail";
+        }
+        if (config.imap_config) {
+          if (imapHost) imapHost.value = config.imap_config.host || "";
+          if (imapPort) imapPort.value = config.imap_config.port || 993;
+          if (imapUser) imapUser.value = config.imap_config.username || "";
+          if (imapFolder) imapFolder.value = config.imap_config.folder || "INBOX";
+          if (imapSsl) imapSsl.checked = config.imap_config.use_ssl !== false;
+          if (imapPass && config.imap_config.has_password) {
+            imapPass.placeholder = "••••••••";
+          }
+        }
+        updateImapConfigVisibility();
+      } catch (e) {
+        console.warn("Could not load provider config:", e);
+      }
+    }
+
+    async function saveProviderType() {
+      if (!apiRoot) return;
+      try {
+        const payload = {
+          provider: providerSelect ? providerSelect.value : "gmail"
+        };
+        await fetch(`${apiRoot}/provider-config`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      } catch (e) {
+        console.warn("Could not save provider type:", e);
+      }
+    }
+
+    async function saveProviderConfig() {
+      if (!apiRoot) return;
+      try {
+        const payload = {
+          provider: providerSelect ? providerSelect.value : "gmail"
+        };
+        if (providerSelect && providerSelect.value === "imap") {
+          payload.imap_config = {
+            host: imapHost ? imapHost.value : "",
+            port: imapPort ? parseInt(imapPort.value, 10) || 993 : 993,
+            username: imapUser ? imapUser.value : "",
+            password: imapPass ? imapPass.value : "",
+            folder: imapFolder ? imapFolder.value : "INBOX",
+            use_ssl: imapSsl ? imapSsl.checked : true
+          };
+        }
+        const resp = await fetch(`${apiRoot}/provider-config`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (resp.ok) {
+          if (imapStatus) {
+            imapStatus.style.color = "var(--accent)";
+            imapStatus.textContent = "Configuration saved.";
+          }
+        } else {
+          if (imapStatus) {
+            imapStatus.style.color = "#b83a3a";
+            imapStatus.textContent = "Failed to save configuration.";
+          }
+        }
+      } catch (e) {
+        if (imapStatus) {
+          imapStatus.style.color = "#b83a3a";
+          imapStatus.textContent = "Error: " + e.message;
+        }
+      }
+    }
+
+    if (providerSelect) {
+      providerSelect.addEventListener("change", () => {
+        updateImapConfigVisibility();
+        saveProviderType();
+      });
+    }
+    if (imapSave) imapSave.addEventListener("click", saveProviderConfig);
+
+    loadProviderConfig();
 
     async function initData() {
       try {
