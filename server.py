@@ -39,7 +39,7 @@ from paths import (
 )
 from session_store import scrape_status_for_range, get_full_release_cache
 from pipeline import populate_release_cache, MaxResultsExceeded
-from gmail import _find_credentials_file, GmailAuthError, gmail_authenticate
+from gmail_client import _find_credentials_file, GmailAuthError, gmail_authenticate
 from provider_factory import load_provider_config, save_provider_config, get_current_provider_type
 from email_provider import AuthenticationError, ProviderError
 

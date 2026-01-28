@@ -2,15 +2,11 @@
 IMAP email provider implementation.
 
 Supports generic IMAP servers including Gmail, iCloud, Outlook, and others.
-Uses Python's standard library imaplib and email modules.
 """
 
 from __future__ import annotations
 
 import email
-import imaplib
-import ssl
-from dataclasses import dataclass
 from datetime import datetime
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
@@ -21,19 +17,9 @@ from email_provider import (
     EmailMessage,
     SearchQuery,
     AuthenticationError,
-    ProviderError,
 )
 
-
-@dataclass
-class ImapConfig:
-    """IMAP server configuration."""
-    host: str
-    port: int = 993
-    username: str = ""
-    password: str = ""  # App-specific password recommended
-    use_ssl: bool = True
-    folder: str = "INBOX"  # Use "[Gmail]/All Mail" for Gmail
+from imap_client import ImapClient, ImapConfig
 
 
 class ImapProvider(EmailProvider):
@@ -52,7 +38,7 @@ class ImapProvider(EmailProvider):
             config: IMAP server configuration
         """
         self.config = config
-        self._connection: Optional[imaplib.IMAP4_SSL | imaplib.IMAP4] = None
+        self._client = ImapClient(config)
 
     def authenticate(self) -> None:
         """
@@ -61,58 +47,7 @@ class ImapProvider(EmailProvider):
         Raises:
             AuthenticationError: If connection or login fails
         """
-        if not self.config.host:
-            raise AuthenticationError("IMAP host not configured")
-        if not self.config.username:
-            raise AuthenticationError("IMAP username not configured")
-        if not self.config.password:
-            raise AuthenticationError("IMAP password not configured")
-
-        try:
-            if self.config.use_ssl:
-                context = ssl.create_default_context()
-                self._connection = imaplib.IMAP4_SSL(
-                    self.config.host,
-                    self.config.port,
-                    ssl_context=context,
-                )
-            else:
-                self._connection = imaplib.IMAP4(
-                    self.config.host,
-                    self.config.port,
-                )
-
-            self._connection.login(
-                self.config.username,
-                self.config.password,
-            )
-
-            # Select folder (readonly to avoid modifying messages)
-            status, data = self._connection.select(self.config.folder, readonly=True)
-            if status != "OK":
-                raise AuthenticationError(
-                    f"Failed to select folder '{self.config.folder}'. "
-                    f"Check that the folder exists."
-                )
-
-        except imaplib.IMAP4.error as e:
-            self._connection = None
-            error_msg = str(e)
-            if "authentication" in error_msg.lower() or "login" in error_msg.lower():
-                raise AuthenticationError(
-                    f"IMAP login failed. Check username and password. "
-                    f"For Gmail/iCloud/Outlook, use an app-specific password. ({e})"
-                )
-            raise AuthenticationError(f"IMAP error: {e}")
-        except (OSError, TimeoutError) as e:
-            self._connection = None
-            raise AuthenticationError(
-                f"Could not connect to {self.config.host}:{self.config.port}. "
-                f"Check server address and network connection. ({e})"
-            )
-        except Exception as e:
-            self._connection = None
-            raise AuthenticationError(f"IMAP connection failed: {e}")
+        self._client.authenticate()
 
     def search(
         self,
@@ -131,36 +66,19 @@ class ImapProvider(EmailProvider):
         Returns:
             List of IMAP UIDs (as strings)
         """
-        if not self._connection:
-            raise AuthenticationError("Not authenticated. Call authenticate() first.")
-
         # Build IMAP search criteria
         criteria = self._build_search_criteria(query)
 
         if log:
             log(f"IMAP UID search: {' '.join(criteria)}")
 
-        try:
-            # Use UID SEARCH for stable message IDs
-            # This is more reliable across different IMAP servers including iCloud
-            status, data = self._connection.uid('SEARCH', *criteria)
-            if status != "OK":
-                raise ProviderError(f"IMAP search failed: {status}")
+        message_ids = self._client.uid_search(criteria)
 
-            # data[0] is space-separated list of UIDs
-            if not data or not data[0]:
-                return []
+        # IMAP returns oldest first; reverse for newest first
+        message_ids.reverse()
 
-            message_ids = data[0].decode().split()
-
-            # IMAP returns oldest first; reverse for newest first
-            message_ids.reverse()
-
-            # Apply max_results limit
-            return message_ids[:max_results]
-
-        except imaplib.IMAP4.error as e:
-            raise ProviderError(f"IMAP search error: {e}")
+        # Apply max_results limit
+        return message_ids[:max_results]
 
     def _build_search_criteria(self, query: SearchQuery) -> list[str]:
         """
@@ -230,9 +148,6 @@ class ImapProvider(EmailProvider):
         Returns:
             Dict mapping message ID to EmailMessage
         """
-        if not self._connection:
-            raise AuthenticationError("Not authenticated. Call authenticate() first.")
-
         if not message_ids:
             return {}
 
@@ -267,19 +182,8 @@ class ImapProvider(EmailProvider):
         # Use BODY[] instead of RFC822 for better compatibility
         # Some servers (like iCloud) don't return message content with RFC822
         # Use UID FETCH since we're working with UIDs from search
-        status, data = self._connection.uid('FETCH', msg_id, 'BODY[]')
-        
-        if status != "OK" or not data or not data[0]:
-            return None
-
-        # data[0] can be either:
-        # - A tuple: (envelope, message_bytes) - most common format
-        # - Raw bytes directly - some servers like iCloud return this
-        if isinstance(data[0], tuple) and len(data[0]) >= 2:
-            raw_email = data[0][1]
-        elif isinstance(data[0], bytes):
-            raw_email = data[0]
-        else:
+        raw_email = self._client.uid_fetch_body(msg_id)
+        if not raw_email:
             return None
 
         msg = email.message_from_bytes(raw_email)
@@ -369,11 +273,4 @@ class ImapProvider(EmailProvider):
 
     def close(self) -> None:
         """Close the IMAP connection."""
-        if self._connection:
-            try:
-                self._connection.close()
-                self._connection.logout()
-            except Exception:
-                pass
-            finally:
-                self._connection = None
+        self._client.close()
