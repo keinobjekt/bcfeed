@@ -26,8 +26,7 @@ class ImapProvider(EmailProvider):
     """
     IMAP-based email provider.
 
-    Supports any IMAP-compatible email server. For Gmail, Outlook, iCloud,
-    and Yahoo, users typically need to generate an app-specific password.
+    Supports any IMAP-compatible email server.
     """
 
     def __init__(self, config: ImapConfig):

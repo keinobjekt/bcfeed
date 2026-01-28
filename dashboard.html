@@ -115,68 +115,128 @@
   </div>
   <div id="settings-backdrop" class="settings-backdrop">
     <div class="settings-panel">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <!-- Header -->
+      <div class="settings-header">
         <h2>Settings</h2>
         <button id="settings-close" class="button" aria-label="Close settings">✕</button>
       </div>
-      <div class="settings-row dev-setting">
-        <input type="checkbox" id="theme-toggle" />
-        <label for="theme-toggle">Dark mode</label>
-      </div>
-      <div class="settings-row dev-setting">
-        <input type="checkbox" id="show-cached-toggle" checked />
-        <label for="show-cached-toggle">Show cached badges</label>
-      </div>
-      <div class="dev-setting" style="height:12px;"></div>
-      <div style="display:flex; justify-content:flex-start;">
-        <button id="settings-reset" class="button" style="width:auto; padding:6px 10px;">Clear cache</button>
-      </div>
-      <div style="height:12px;"></div>
-      <div style="font-size:12px; font-weight:600; letter-spacing:0.2px; color:var(--muted);">Credentials:</div>
-      <div style="display:flex; justify-content:flex-start; margin-top:6px;">
-        <button id="clear-creds-btn" class="button" style="padding:6px 10px;">Clear credentials</button>
-      </div>
-      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px;">
-        <input type="file" id="load-creds-file" accept="application/json" style="display:none;" />
-        <button id="load-creds-btn" class="button" style="padding:6px 10px;">Load credentials</button>
-      </div>
-      <div style="display:flex; justify-content:flex-start; margin-top:6px;">
-        <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" class="button" style="border-color:#b83a3a; color:#b83a3a; padding:6px 10px; font-size:12px;">Revoke Gmail authorization (external link)</a>
-      </div>
-      <div style="height:16px;"></div>
-      <div style="font-size:12px; font-weight:600; letter-spacing:0.2px; color:var(--muted);">Email Provider:</div>
-      <div style="margin-top:6px;">
-        <select id="provider-select" style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:13px;">
-          <option value="gmail">Gmail API (OAuth)</option>
-          <option value="imap">IMAP (App Password)</option>
-        </select>
-      </div>
-      <div id="imap-config" style="display:none; margin-top:12px; padding:12px; border:1px solid var(--border); border-radius:8px; background:var(--panel);">
-        <div style="font-size:11px; font-weight:600; color:var(--muted); margin-bottom:8px;">IMAP Settings</div>
-        <div style="display:grid; grid-template-columns:80px 1fr; gap:6px 8px; align-items:center; font-size:13px;">
-          <label for="imap-host">Server:</label>
-          <input type="text" id="imap-host" placeholder="imap.gmail.com" style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--surface); color:var(--text);" />
-          <label for="imap-port">Port:</label>
-          <input type="number" id="imap-port" value="993" style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--surface); color:var(--text); width:80px;" />
-          <label for="imap-user">Username:</label>
-          <input type="text" id="imap-user" placeholder="user@example.com" style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--surface); color:var(--text);" />
-          <label for="imap-pass">Password:</label>
-          <input type="password" id="imap-pass" placeholder="App password" style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--surface); color:var(--text);" />
-          <label for="imap-folder">Folder:</label>
-          <input type="text" id="imap-folder" value="INBOX" style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--surface); color:var(--text);" />
-          <div></div>
-          <div style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" id="imap-ssl" checked />
-            <label for="imap-ssl" style="margin:0;">Use SSL/TLS</label>
+
+      <div class="settings-content-scroll">
+        <!-- Appearance Section -->
+        <div class="settings-section">
+          <div class="settings-section-title">Appearance</div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <input type="checkbox" id="theme-toggle" class="filter-checkbox show" />
+              <label for="theme-toggle" style="cursor:pointer;">Dark mode</label>
+            </div>
+            <div class="settings-row">
+              <input type="checkbox" id="show-cached-toggle" class="filter-checkbox show" checked />
+              <label for="show-cached-toggle" style="cursor:pointer;">Show cached badges</label>
+            </div>
           </div>
         </div>
-        <div style="display:flex; gap:8px; margin-top:10px;">
-          <button id="imap-save" class="button" style="padding:5px 10px; font-size:12px;">Save</button>
+
+        <!-- Provider Section -->
+        <div class="settings-section">
+          <div class="settings-section-title">Email Configuration</div>
+          <div class="settings-group">
+              <div>
+                  <label for="provider-select" class="form-label">Provider</label>
+                  <select id="provider-select" class="form-select">
+                      <option value="gmail">Gmail API (OAuth)</option>
+                      <option value="imap">IMAP</option>
+                  </select>
+              </div>
+
+              <!-- Gmail Config Panel -->
+              <div id="gmail-config-panel" class="provider-panel" style="display:none;">
+                  <div style="margin-bottom:12px; font-size:13px; color:var(--muted); line-height:1.4;">
+                      Connect using the official Google API. Requires a <code>client_secret.json</code> file.
+                  </div>
+                  <div class="settings-actions">
+                      <button id="load-creds-btn" class="button primary">Load credentials file</button>
+                      <button id="clear-creds-btn" class="button">Clear credentials</button>
+                      <!-- Hidden file input needs to stay -->
+                      <input type="file" id="load-creds-file" accept="application/json" style="display:none;" />
+                  </div>
+                  <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px;">
+                      <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" class="button danger" style="text-decoration:none; display:inline-block;">Revoke Gmail Authorization</a>
+                      <div class="help-text">Revokes access on Google's side. To remove local tokens, use "Clear credentials".</div>
+                  </div>
+              </div>
+
+              <!-- IMAP Config Panel -->
+              <div id="imap-config-panel" class="provider-panel" style="display:none;">
+                  <div style="display: flex; gap: 24px; align-items: flex-start;">
+                      <!-- Left Column: Server, User, Folder -->
+                      <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
+                          <div>
+                              <label for="imap-host" class="form-label">Server</label>
+                              <input type="text" id="imap-host" class="form-input" placeholder="imap.example.com" />
+                          </div>
+                          <div>
+                              <label for="imap-user" class="form-label">Username</label>
+                              <input type="text" id="imap-user" class="form-input" placeholder="user@example.com" />
+                          </div>
+                          <div>
+                              <label for="imap-folder" class="form-label">Folder</label>
+                              <input type="text" id="imap-folder" class="form-input" value="INBOX" />
+                          </div>
+                      </div>
+
+                      <!-- Right Column: Port/SSL, Password -->
+                      <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
+                          <!-- Security & Port Group -->
+                          <div style="display: flex; gap: 12px;">
+                              <div style="flex: 7;">
+                                  <label for="imap-ssl" class="form-label">Security</label>
+                                  <select id="imap-ssl" class="form-select">
+                                      <option value="ssl">SSL/TLS</option>
+                                      <option value="none">None</option>
+                                  </select>
+                              </div>
+                              <div style="flex: 3; min-width: 85px;">
+                                  <label for="imap-port" class="form-label">Port</label>
+                                  <input type="number" id="imap-port" class="form-input" value="993" />
+                              </div>
+                          </div>
+
+                          <!-- Password Group -->
+                          <div>
+                              <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                                  <label for="imap-pass" class="form-label" style="margin-bottom:0;">Password</label>
+                                  <span title="Some providers require an app-specific password for IMAP access. Check your provider's documentation." style="cursor: help; color: var(--text); opacity: 0.7; display: flex; align-items: center;">
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                  </span>
+                              </div>
+                              <input type="password" id="imap-pass" class="form-input" placeholder="Password" />
+                          </div>
+                      </div>
+                  </div>
+
+                  <!-- Footer -->
+                  <div style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                      <button id="imap-save" class="button primary">Save Configuration</button>
+                      <div id="imap-status" style="font-size:12px; color:var(--muted); text-align: right;"></div>
+                  </div>
+              </div>
+          </div>
         </div>
-        <div id="imap-status" style="font-size:11px; margin-top:6px; color:var(--muted);"></div>
-        <div style="font-size:10px; color:var(--muted); margin-top:8px;">
-          Tip: For Gmail/iCloud/Outlook, use an <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener" style="color:var(--accent);">app-specific password</a>.
+
+        <!-- Data Section -->
+        <div class="settings-section">
+          <div class="settings-section-title">Data & Storage</div>
+          <div class="settings-group">
+            <div style="font-size:13px; color:var(--muted); line-height:1.4;">
+                Clear all cached release data, images, and viewing history. Your settings and credentials will be preserved.
+            </div>
+            <div class="settings-actions">
+               <button id="settings-reset" class="button">Clear cache & reset database</button>
+            </div>
+          </div>
         </div>
+
       </div>
     </div>
   </div>

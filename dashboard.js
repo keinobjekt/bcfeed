@@ -1705,7 +1705,8 @@
     // -------------------------------------------------------------------------
     // Provider configuration (IMAP/Gmail)
     const providerSelect = document.getElementById("provider-select");
-    const imapConfig = document.getElementById("imap-config");
+    const gmailConfigPanel = document.getElementById("gmail-config-panel");
+    const imapConfigPanel = document.getElementById("imap-config-panel");
     const imapHost = document.getElementById("imap-host");
     const imapPort = document.getElementById("imap-port");
     const imapUser = document.getElementById("imap-user");
@@ -1716,9 +1717,10 @@
     const imapStatus = document.getElementById("imap-status");
 
     function updateImapConfigVisibility() {
-      if (imapConfig) {
-        imapConfig.style.display = providerSelect && providerSelect.value === "imap" ? "block" : "none";
-      }
+      if (!providerSelect) return;
+      const isImap = providerSelect.value === "imap";
+      if (imapConfigPanel) imapConfigPanel.style.display = isImap ? "block" : "none";
+      if (gmailConfigPanel) gmailConfigPanel.style.display = isImap ? "none" : "block";
     }
 
     async function loadProviderConfig() {
@@ -1735,7 +1737,7 @@
           if (imapPort) imapPort.value = config.imap_config.port || 993;
           if (imapUser) imapUser.value = config.imap_config.username || "";
           if (imapFolder) imapFolder.value = config.imap_config.folder || "INBOX";
-          if (imapSsl) imapSsl.checked = config.imap_config.use_ssl !== false;
+          if (imapSsl) imapSsl.value = (config.imap_config.use_ssl !== false) ? "ssl" : "none";
           if (imapPass && config.imap_config.has_password) {
             imapPass.placeholder = "••••••••";
           }
@@ -1775,7 +1777,7 @@
             username: imapUser ? imapUser.value : "",
             password: imapPass ? imapPass.value : "",
             folder: imapFolder ? imapFolder.value : "INBOX",
-            use_ssl: imapSsl ? imapSsl.checked : true
+            use_ssl: imapSsl ? (imapSsl.value === "ssl") : true
           };
         }
         const resp = await fetch(`${apiRoot}/provider-config`, {
