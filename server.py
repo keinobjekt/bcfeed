@@ -432,7 +432,7 @@ def embed_meta():
         return _corsify(jsonify({"error": "Unable to find bc-page-properties meta"})), 404
 
     item_id = data.get("item_id")
-    is_track = data.get("item_type") == "track"
+    is_track = (data.get("item_type") == "track") or (data.get("item_type") == "t")
     embed_url = build_embed_url(item_id, is_track)
 
     # Persist embed metadata for future sessions.
