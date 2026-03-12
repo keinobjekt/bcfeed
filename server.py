@@ -19,17 +19,19 @@ from queue import SimpleQueue
 from werkzeug.serving import make_server, WSGIRequestHandler
 
 from bandcamp import extract_bc_meta, extract_bandcamp_description, build_embed_url
+from credential_store import (
+    CredentialStoreError,
+    has_imap_password,
+    save_gmail_client_config_json,
+)
 from util import parse_date
 from paths import (
-    DATA_DIR,
     VIEWED_PATH,
     STARRED_PATH,
     RELEASE_CACHE_PATH,
     EMPTY_DATES_PATH,
     SCRAPE_STATUS_PATH,
     EMBED_CACHE_PATH,
-    TOKEN_PATH,
-    CREDENTIALS_PATH,
     DASHBOARD_PATH,
     DASHBOARD_CSS_PATH,
     DASHBOARD_JS_PATH,
@@ -39,7 +41,13 @@ from paths import (
 )
 from session_store import scrape_status_for_range, get_full_release_cache
 from pipeline import populate_release_cache, MaxResultsExceeded
-from gmail_client import _find_credentials_file, GmailAuthError, gmail_authenticate
+from gmail_client import (
+    GmailAuthError,
+    clear_gmail_credentials,
+    gmail_authenticate,
+    gmail_credentials_configured,
+    gmail_token_available,
+)
 from provider_factory import load_provider_config, save_provider_config, get_current_provider_type
 from email_provider import AuthenticationError, ProviderError
 
@@ -344,16 +352,18 @@ def _has_credentials_for_provider() -> bool:
     provider_type = get_current_provider_type()
 
     if provider_type == "gmail":
-        # Gmail requires both credentials file and token
-        return _find_credentials_file() is not None and TOKEN_PATH.exists()
+        return gmail_credentials_configured() and gmail_token_available()
     elif provider_type == "imap":
-        # IMAP requires host, username, and password in config
         config = load_provider_config()
         imap_cfg = config.get("imap_config", {})
+        try:
+            has_password = has_imap_password() or bool(imap_cfg.get("password", ""))
+        except CredentialStoreError:
+            has_password = bool(imap_cfg.get("password", ""))
         return bool(
             imap_cfg.get("host", "").strip()
             and imap_cfg.get("username", "").strip()
-            and imap_cfg.get("password", "")
+            and has_password
         )
     return False
 
@@ -365,7 +375,7 @@ def config_json():
     payload = {
         "title": "bcfeed",
         "embed_proxy_url": embed_proxy_url,
-        "has_token": TOKEN_PATH.exists(),
+        "has_token": gmail_token_available(),
         "has_credentials": has_credentials,
         "default_theme": "light",
         "clear_status_on_load": False,
@@ -532,9 +542,7 @@ def clear_credentials():
         app.logger.info(msg)
 
     try:
-        if TOKEN_PATH.exists():
-            TOKEN_PATH.unlink()
-            log("Removed saved Gmail token.")
+        clear_gmail_credentials()
         log("Credentials cleared.")
         return _corsify(jsonify({"ok": True, "logs": logs}))
     except Exception as exc:
@@ -558,17 +566,23 @@ def load_credentials():
         file = request.files["file"]
         if not file.filename:
             return _corsify(jsonify({"error": "Empty filename"})), 400
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        tmp = CREDENTIALS_PATH.with_suffix(".tmp")
-        file.save(tmp)
-        tmp.replace(CREDENTIALS_PATH)
-        if TOKEN_PATH.exists():
-            TOKEN_PATH.unlink()
-            log("Removed existing Gmail token.")
-        log("Saved credentials file. Authenticating…")
+        raw_json = file.read()
+        if not raw_json:
+            return _corsify(jsonify({"error": "Uploaded file was empty"})), 400
+        save_gmail_client_config_json(raw_json.decode("utf-8"))
+        clear_gmail_credentials(clear_client_config=False)
+        log("Saved Gmail credentials to secure storage. Authenticating…")
         gmail_authenticate()
         log("Credentials uploaded and authenticated.")
         return _corsify(jsonify({"ok": True, "logs": logs}))
+    except UnicodeDecodeError:
+        return _corsify(jsonify({"error": "Credentials file must be valid UTF-8 JSON", "logs": logs})), 400
+    except ValueError as exc:
+        log(f"ERROR: {exc}")
+        return _corsify(jsonify({"error": str(exc), "logs": logs})), 400
+    except CredentialStoreError as exc:
+        log(f"ERROR: {exc}")
+        return _corsify(jsonify({"error": str(exc), "logs": logs})), 500
     except Exception as exc:
         log(f"ERROR: {exc}")
         return _corsify(jsonify({"error": str(exc), "logs": logs})), 500
@@ -602,9 +616,9 @@ def populate_range_stream():
     # Check credentials based on provider type
     provider_type = get_current_provider_type()
     if provider_type == "gmail":
-        if not _find_credentials_file():
+        if not gmail_credentials_configured():
             return error_stream("Gmail credentials not found. Reload credentials in the settings panel.")
-        if not TOKEN_PATH.exists():
+        if not gmail_token_available():
             return error_stream("Gmail token missing. Reload credentials in the settings panel to re-authenticate.")
     elif provider_type == "imap":
         # Check IMAP credentials
@@ -676,6 +690,10 @@ def provider_config():
         config = load_provider_config()
         # Don't expose password in GET response
         imap_cfg = config.get("imap_config", {})
+        try:
+            has_password = has_imap_password() or bool(imap_cfg.get("password", ""))
+        except CredentialStoreError:
+            has_password = bool(imap_cfg.get("password", ""))
         safe_config = {
             "provider": config.get("provider", "gmail"),
             "imap_config": {
@@ -684,34 +702,37 @@ def provider_config():
                 "username": imap_cfg.get("username", ""),
                 "folder": imap_cfg.get("folder", "INBOX"),
                 "use_ssl": imap_cfg.get("use_ssl", True),
-                "has_password": bool(imap_cfg.get("password")),
+                "has_password": has_password,
             },
-            "has_gmail_credentials": CREDENTIALS_PATH.exists(),
+            "has_gmail_credentials": gmail_credentials_configured(),
         }
         return _corsify(jsonify(safe_config))
 
     # POST: Save config
-    data = request.get_json(silent=True) or {}
-    config = load_provider_config()
+    try:
+        data = request.get_json(silent=True) or {}
+        config = load_provider_config()
 
-    if "provider" in data:
-        config["provider"] = data["provider"]
+        if "provider" in data:
+            config["provider"] = data["provider"]
 
-    if "imap_config" in data:
-        imap = data["imap_config"]
-        existing_imap = config.get("imap_config", {})
-        config["imap_config"] = {
-            "host": imap.get("host", existing_imap.get("host", "")),
-            "port": imap.get("port", existing_imap.get("port", 993)),
-            "username": imap.get("username", existing_imap.get("username", "")),
-            # Only update password if provided (not empty)
-            "password": imap.get("password") or existing_imap.get("password", ""),
-            "folder": imap.get("folder", existing_imap.get("folder", "INBOX")),
-            "use_ssl": imap.get("use_ssl", existing_imap.get("use_ssl", True)),
-        }
+        if "imap_config" in data:
+            imap = data["imap_config"]
+            existing_imap = config.get("imap_config", {})
+            password = imap.get("password")
+            config["imap_config"] = {
+                "host": imap.get("host", existing_imap.get("host", "")),
+                "port": imap.get("port", existing_imap.get("port", 993)),
+                "username": imap.get("username", existing_imap.get("username", "")),
+                "password": password if password else existing_imap.get("password", ""),
+                "folder": imap.get("folder", existing_imap.get("folder", "INBOX")),
+                "use_ssl": imap.get("use_ssl", existing_imap.get("use_ssl", True)),
+            }
 
-    save_provider_config(config)
-    return _corsify(jsonify({"ok": True}))
+        save_provider_config(config)
+        return _corsify(jsonify({"ok": True}))
+    except CredentialStoreError as exc:
+        return _corsify(jsonify({"error": str(exc)})), 500
 
 
 if __name__ == "__main__":

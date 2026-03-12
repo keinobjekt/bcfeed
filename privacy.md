@@ -6,6 +6,8 @@ This application runs on your local machine.
 
 - All Gmail access is performed locally using OAuth credentials that you create and control in your own Google Cloud project.
 
+- Sensitive Gmail OAuth material and IMAP passwords managed by bcfeed are stored securely in your system keychain.
+
 - Gmail data retrieved by the application is processed only in memory or stored locally on your device, depending on your configuration.
 
 - No analytics, telemetry, usage tracking, or remote logging is included; any Gmail data cached by the application remains entirely on your local machine.

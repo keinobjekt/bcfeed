@@ -5,3 +5,4 @@ bs4
 flask
 furl
 requests
+keyring
