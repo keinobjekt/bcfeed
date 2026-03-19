@@ -921,6 +921,19 @@
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
+    .form-select {
+      appearance: none;
+      padding-right: 36px;
+      background-image:
+        linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+        linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position:
+        calc(100% - 16px) calc(50% - 1px),
+        calc(100% - 11px) calc(50% - 1px);
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+    }
+
     .form-input:focus, .form-select:focus {
       outline: none;
       border-color: var(--accent);
