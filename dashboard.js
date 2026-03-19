@@ -1575,10 +1575,10 @@
       if (!scrapeStatusUrl) return;
       try {
         const params = new URLSearchParams();
-        const firstDate = releases[0]?.date;
-        const lastDate = releases[releases.length - 1]?.date;
-        if (firstDate) params.set("start", formatDate(firstDate));
-        if (lastDate) params.set("end", formatDate(lastDate));
+        const startDate = state.dateFilterFrom || state.dateFilterTo || formatDate(releases[0]?.date);
+        const endDate = state.dateFilterTo || state.dateFilterFrom || formatDate(releases[releases.length - 1]?.date);
+        if (startDate) params.set("start", startDate);
+        if (endDate) params.set("end", endDate);
         const resp = await fetch(`${scrapeStatusUrl}?${params.toString()}`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
