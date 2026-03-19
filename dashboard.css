@@ -968,11 +968,24 @@
         border: 1px solid var(--border);
         padding: 20px;
     }
+
+    .settings-panel .button {
+      font-weight: 500;
+    }
     
-    .imap-config-panel {
-      display: flex; 
-      flex-direction: column; 
-      gap: 16px;
+    .imap-intro-text {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+
+    .imap-folder-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
     }
 
     .settings-actions {
@@ -986,7 +999,37 @@
     .settings-actions .button {
       font-size: 13px;
       padding: 8px 14px;
-      font-weight: 500;
+    }
+
+    .imap-action-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: nowrap;
+    }
+
+    .imap-action-row .button {
+      white-space: nowrap;
+      flex: 0 0 auto;
+    }
+
+    .imap-status-text {
+      margin-top: 0;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .imap-save-footer {
+      display: flex;
+      align-items: center;
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .imap-save-button {
+      white-space: nowrap;
+      flex: 0 0 auto;
     }
     
     .button.primary {

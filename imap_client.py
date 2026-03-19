@@ -8,6 +8,7 @@ Parsing MIME content into EmailMessage lives in the provider layer.
 from __future__ import annotations
 
 import imaplib
+import re
 import ssl
 from dataclasses import dataclass
 from typing import Optional
@@ -24,7 +25,16 @@ class ImapConfig:
     username: str = ""
     password: str = ""  # App-specific password recommended
     use_ssl: bool = True
-    folder: str = "INBOX"  # Use "[Gmail]/All Mail" for Gmail
+    folder: str = ""
+
+
+@dataclass
+class ImapFolder:
+    """Selectable mailbox metadata returned by IMAP LIST."""
+
+    name: str
+    flags: tuple[str, ...] = ()
+    selectable: bool = True
 
 
 class ImapClient:
@@ -32,9 +42,13 @@ class ImapClient:
         self.config = config
         self._connection: Optional[imaplib.IMAP4_SSL | imaplib.IMAP4] = None
 
-    def authenticate(self) -> None:
+    _LIST_RESPONSE_RE = re.compile(
+        r'^\((?P<flags>[^)]*)\)\s+(?P<delimiter>NIL|"(?:[^"\\]|\\.)*"|[^ ]+)\s+(?P<name>.+)$'
+    )
+
+    def authenticate(self, *, select_folder: bool = True) -> None:
         """
-        Connect, login, and select the configured folder (readonly).
+        Connect, login, and optionally select the configured folder (readonly).
         """
         if not self.config.host:
             raise AuthenticationError("IMAP host not configured")
@@ -62,12 +76,8 @@ class ImapClient:
                 self.config.password,
             )
 
-            status, _data = self._connection.select(self.config.folder, readonly=True)
-            if status != "OK":
-                raise AuthenticationError(
-                    f"Failed to select folder '{self.config.folder}'. "
-                    f"Check that the folder exists."
-                )
+            if select_folder:
+                self.select_folder(self.config.folder)
 
         except imaplib.IMAP4.error as exc:
             self._connection = None
@@ -87,6 +97,41 @@ class ImapClient:
         except Exception as exc:
             self._connection = None
             raise AuthenticationError(f"IMAP connection failed: {exc}")
+
+    def select_folder(self, folder: str | None = None) -> None:
+        if not self._connection:
+            raise AuthenticationError("Not authenticated. Call authenticate() first.")
+
+        selected_folder = (folder or self.config.folder or "").strip()
+        if not selected_folder:
+            raise AuthenticationError("IMAP folder not configured")
+
+        try:
+            status, _data = self._connection.select(selected_folder, readonly=True)
+            if status != "OK":
+                raise AuthenticationError(
+                    f"Failed to select folder '{selected_folder}'. Check that the folder exists."
+                )
+        except imaplib.IMAP4.error as exc:
+            raise AuthenticationError(f"IMAP error while selecting '{selected_folder}': {exc}")
+        self.config.folder = selected_folder
+
+    def list_folders(self) -> list[ImapFolder]:
+        if not self._connection:
+            raise AuthenticationError("Not authenticated. Call authenticate() first.")
+
+        try:
+            status, data = self._connection.list()
+            if status != "OK":
+                raise ProviderError(f"IMAP folder listing failed: {status}")
+            return [
+                folder
+                for raw_item in data or []
+                for folder in [self._parse_list_item(raw_item)]
+                if folder is not None
+            ]
+        except imaplib.IMAP4.error as exc:
+            raise ProviderError(f"IMAP folder listing error: {exc}")
 
     def uid_search(self, criteria: list[str]) -> list[str]:
         if not self._connection:
@@ -119,13 +164,47 @@ class ImapClient:
             return data[0]
         return None
 
-    def close(self) -> None:
-        if self._connection:
-            try:
-                self._connection.close()
-                self._connection.logout()
-            except Exception:
-                pass
-            finally:
-                self._connection = None
+    def _parse_list_item(self, raw_item: bytes | str | None) -> ImapFolder | None:
+        if raw_item is None:
+            return None
 
+        item_text = raw_item.decode("utf-8", errors="replace") if isinstance(raw_item, bytes) else str(raw_item)
+        item_text = item_text.strip()
+        if not item_text:
+            return None
+
+        match = self._LIST_RESPONSE_RE.match(item_text)
+        if not match:
+            return ImapFolder(name=self._decode_list_token(item_text))
+
+        flags = tuple(flag for flag in match.group("flags").split() if flag)
+        name = self._decode_list_token(match.group("name"))
+        selectable = "\\noselect" not in {flag.lower() for flag in flags}
+        return ImapFolder(
+            name=name,
+            flags=flags,
+            selectable=selectable,
+        )
+
+    def _decode_list_token(self, token: str) -> str:
+        token = token.strip()
+        if len(token) >= 2 and token[0] == '"' and token[-1] == '"':
+            token = token[1:-1]
+            token = token.replace(r"\\", "\\").replace(r"\"", '"')
+        return token
+
+    def close(self) -> None:
+        connection = self._connection
+        self._connection = None
+        if not connection:
+            return
+
+        try:
+            connection.close()
+        except Exception:
+            pass
+
+        try:
+            connection.logout()
+        except Exception:
+            pass

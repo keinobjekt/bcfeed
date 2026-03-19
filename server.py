@@ -21,6 +21,7 @@ from werkzeug.serving import make_server, WSGIRequestHandler
 from bandcamp import extract_bc_meta, extract_bandcamp_description, build_embed_url
 from credential_store import (
     CredentialStoreError,
+    get_imap_password,
     has_imap_password,
     save_gmail_client_config_json,
 )
@@ -50,6 +51,7 @@ from gmail_client import (
 )
 from provider_factory import load_provider_config, save_provider_config, get_current_provider_type
 from email_provider import AuthenticationError, ProviderError
+from imap_client import ImapClient, ImapConfig, ImapFolder
 
 app = Flask(__name__)
 
@@ -60,6 +62,7 @@ DOC_LINK_MAP = {
     "GMAIL_SETUP.md": "setup-gmail",
     "README.md": "readme",
 }
+IMAP_DISCOVERY_SEARCH_CRITERIA = ["FROM", '"noreply@bandcamp.com"', "SUBJECT", '"New release from"']
 
 
 def _rewrite_doc_link(match: re.Match) -> str:
@@ -364,8 +367,107 @@ def _has_credentials_for_provider() -> bool:
             imap_cfg.get("host", "").strip()
             and imap_cfg.get("username", "").strip()
             and has_password
+            and imap_cfg.get("folder", "").strip()
         )
     return False
+
+
+def _coerce_imap_port(value) -> int:
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        return 993
+    return port if port > 0 else 993
+
+
+def _coerce_imap_use_ssl(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return True
+    return str(value).strip().lower() not in {"false", "0", "no", "off", "none"}
+
+
+def _imap_connection_signature(imap: dict | None) -> tuple[str, int, str, bool]:
+    imap = imap or {}
+    return (
+        str(imap.get("host", "")).strip(),
+        _coerce_imap_port(imap.get("port", 993)),
+        str(imap.get("username", "")).strip(),
+        _coerce_imap_use_ssl(imap.get("use_ssl", True)),
+    )
+
+
+def _build_imap_config(imap: dict | None, existing: dict | None = None) -> dict:
+    existing = existing or {}
+    imap = imap or {}
+    config = {
+        "host": str(imap.get("host", existing.get("host", "")) or "").strip(),
+        "port": _coerce_imap_port(imap.get("port", existing.get("port", 993))),
+        "username": str(imap.get("username", existing.get("username", "")) or "").strip(),
+        "password": str(imap.get("password", "") or ""),
+        "folder": str(imap.get("folder", existing.get("folder", "")) or "").strip(),
+        "use_ssl": _coerce_imap_use_ssl(imap.get("use_ssl", existing.get("use_ssl", True))),
+    }
+    if not config["password"] and _imap_connection_signature(config) == _imap_connection_signature(existing):
+        try:
+            config["password"] = get_imap_password()
+        except CredentialStoreError:
+            config["password"] = str(existing.get("password", "") or "")
+    return config
+
+
+def _open_imap_client(imap: dict, *, select_folder: bool = False) -> ImapClient:
+    client = ImapClient(ImapConfig(**imap))
+    client.authenticate(select_folder=select_folder)
+    return client
+
+
+def _imap_folder_rank(folder: ImapFolder) -> tuple[int, str]:
+    flags = {flag.lower() for flag in folder.flags}
+    name = folder.name.lower()
+    score = 100
+
+    if "\\all" in flags:
+        score = 0
+    elif "\\inbox" in flags or name == "inbox":
+        score = 10
+    elif "\\archive" in flags or "archive" in name or "all mail" in name:
+        score = 20
+    elif "\\junk" in flags or "\\trash" in flags or "\\sent" in flags or "\\drafts" in flags:
+        score += 500
+    elif any(keyword in name for keyword in ("spam", "junk", "trash", "deleted", "sent", "draft")):
+        score += 500
+
+    if not folder.selectable:
+        score += 1000
+
+    return score, name
+
+
+def _discover_imap_folders(client: ImapClient) -> tuple[list[str], str | None]:
+    folders = client.list_folders()
+    ordered = sorted(folders, key=_imap_folder_rank)
+    selectable = [folder.name for folder in ordered if folder.selectable]
+    recommended_folder: str | None = None
+
+    probe_candidates = [
+        folder for folder in ordered
+        if folder.selectable and _imap_folder_rank(folder)[0] < 500
+    ][:5]
+    for folder in probe_candidates:
+        try:
+            client.select_folder(folder.name)
+            if client.uid_search(IMAP_DISCOVERY_SEARCH_CRITERIA):
+                recommended_folder = folder.name
+                break
+        except (AuthenticationError, ProviderError):
+            continue
+
+    if recommended_folder is None:
+        recommended_folder = next(iter(selectable), None)
+
+    return selectable, recommended_folder
 
 
 @app.route("/config.json", methods=["GET"])
@@ -623,7 +725,7 @@ def populate_range_stream():
     elif provider_type == "imap":
         # Check IMAP credentials
         if not _has_credentials_for_provider():
-            return error_stream("IMAP credentials not configured. Please configure IMAP settings (host, username, password) in the settings panel.")
+            return error_stream("IMAP credentials not configured. Please configure IMAP settings (host, username, password, folder) in the settings panel.")
 
     if not POPULATE_LOCK.acquire(blocking=False):
         return error_stream("Another populate is already running")
@@ -680,6 +782,44 @@ def populate_range_stream():
 # Provider configuration endpoints
 
 
+@app.route("/imap/discover", methods=["POST", "OPTIONS"])
+def imap_discover():
+    """Authenticate with IMAP and return available folders for selection."""
+    if request.method == "OPTIONS":
+        return _corsify(app.response_class(status=204))
+
+    try:
+        data = request.get_json(silent=True) or {}
+        saved_config = load_provider_config().get("imap_config", {})
+        imap = _build_imap_config(data.get("imap_config"), saved_config)
+
+        if not imap["host"]:
+            return _corsify(jsonify({"error": "IMAP host is required."})), 400
+        if not imap["username"]:
+            return _corsify(jsonify({"error": "IMAP username is required."})), 400
+        if not imap["password"]:
+            return _corsify(jsonify({"error": "Enter your IMAP password to load folders."})), 400
+
+        client = None
+        try:
+            client = _open_imap_client(imap, select_folder=False)
+            folders, recommended_folder = _discover_imap_folders(client)
+        finally:
+            if client is not None:
+                client.close()
+
+        return _corsify(jsonify({
+            "folders": folders,
+            "recommended_folder": recommended_folder,
+        }))
+    except CredentialStoreError as exc:
+        return _corsify(jsonify({"error": str(exc)})), 500
+    except (AuthenticationError, ProviderError, ValueError) as exc:
+        return _corsify(jsonify({"error": str(exc)})), 400
+    except Exception as exc:
+        return _corsify(jsonify({"error": f"Failed to load IMAP folders: {exc}"})), 500
+
+
 @app.route("/provider-config", methods=["GET", "POST", "OPTIONS"])
 def provider_config():
     """Get or update the email provider configuration."""
@@ -700,7 +840,7 @@ def provider_config():
                 "host": imap_cfg.get("host", ""),
                 "port": imap_cfg.get("port", 993),
                 "username": imap_cfg.get("username", ""),
-                "folder": imap_cfg.get("folder", "INBOX"),
+                "folder": imap_cfg.get("folder", ""),
                 "use_ssl": imap_cfg.get("use_ssl", True),
                 "has_password": has_password,
             },
@@ -717,22 +857,32 @@ def provider_config():
             config["provider"] = data["provider"]
 
         if "imap_config" in data:
-            imap = data["imap_config"]
             existing_imap = config.get("imap_config", {})
-            password = imap.get("password")
-            config["imap_config"] = {
-                "host": imap.get("host", existing_imap.get("host", "")),
-                "port": imap.get("port", existing_imap.get("port", 993)),
-                "username": imap.get("username", existing_imap.get("username", "")),
-                "password": password if password else existing_imap.get("password", ""),
-                "folder": imap.get("folder", existing_imap.get("folder", "INBOX")),
-                "use_ssl": imap.get("use_ssl", existing_imap.get("use_ssl", True)),
-            }
+            imap = _build_imap_config(data["imap_config"], existing_imap)
+            if not imap["host"]:
+                raise ValueError("IMAP host is required.")
+            if not imap["username"]:
+                raise ValueError("IMAP username is required.")
+            if not imap["password"]:
+                raise ValueError("IMAP password is required.")
+            if not imap["folder"]:
+                raise ValueError("Choose an IMAP folder to scan before saving.")
+
+            client = None
+            try:
+                client = _open_imap_client(imap, select_folder=True)
+            finally:
+                if client is not None:
+                    client.close()
+
+            config["imap_config"] = imap
 
         save_provider_config(config)
         return _corsify(jsonify({"ok": True}))
     except CredentialStoreError as exc:
         return _corsify(jsonify({"error": str(exc)})), 500
+    except (AuthenticationError, ProviderError, ValueError) as exc:
+        return _corsify(jsonify({"error": str(exc)})), 400
 
 
 if __name__ == "__main__":
