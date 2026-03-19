@@ -8,13 +8,13 @@ import datetime
 import html
 import json
 import os
-import re
 import socket
 import threading
 from pathlib import Path
 
 import requests
 from flask import Flask, jsonify, request, Response, stream_with_context, send_file, render_template
+from markdown_it import MarkdownIt
 from queue import SimpleQueue
 from werkzeug.serving import make_server, WSGIRequestHandler
 
@@ -38,6 +38,7 @@ from paths import (
     DASHBOARD_JS_PATH,
     README_PATH,
     SETUP_PATH,
+    IMAP_SETUP_PATH,
     GMAIL_SETUP_PATH,
 )
 from session_store import scrape_status_for_range, get_full_release_cache
@@ -59,104 +60,28 @@ POPULATE_LOCK = threading.Lock()
 GMAIL_MAX_RESULTS_HARD = 2000
 DOC_LINK_MAP = {
     "SETUP.md": "setup",
+    "IMAP_SETUP.md": "setup-imap",
     "GMAIL_SETUP.md": "setup-gmail",
     "README.md": "readme",
 }
 IMAP_DISCOVERY_SEARCH_CRITERIA = ["FROM", '"noreply@bandcamp.com"', "SUBJECT", '"New release from"']
 
 
-def _rewrite_doc_link(match: re.Match) -> str:
-    label = match.group(1)
-    href = match.group(2)
-    href = DOC_LINK_MAP.get(href, href)
-    return f'<a href="{href}" target="_blank" rel="noopener">{label}</a>'
+def _build_doc_markdown_renderer() -> MarkdownIt:
+    md = MarkdownIt("gfm-like", {"html": True})
+
+    def render_link_open(self, tokens, idx, options, env):
+        href = tokens[idx].attrGet("href") or ""
+        tokens[idx].attrSet("href", DOC_LINK_MAP.get(href, href))
+        tokens[idx].attrSet("target", "_blank")
+        tokens[idx].attrSet("rel", "noopener")
+        return self.renderToken(tokens, idx, options, env)
+
+    md.add_render_rule("link_open", render_link_open)
+    return md
 
 
-def _format_setup_inline(text: str) -> str:
-    parts = text.split("`")
-    out = []
-    for idx, part in enumerate(parts):
-        escaped = html.escape(part)
-        if idx % 2 == 1:
-            out.append(f"<code>{escaped}</code>")
-        else:
-            escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
-            escaped = re.sub(r"\*(.+?)\*", r"<em>\1</em>", escaped)
-            escaped = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _rewrite_doc_link, escaped)
-            escaped = re.sub(
-                r"(https?://[\w./?&#=%:+~-]+)",
-                r'<a href="\1" target="_blank" rel="noopener">\1</a>',
-                escaped,
-            )
-            out.append(escaped)
-    return "".join(out)
-
-
-def _render_markdown_html(markdown_text: str) -> str:
-    lines = markdown_text.splitlines()
-    out = []
-    in_ul = False
-    in_ol = False
-    in_code = False
-
-    def close_lists():
-        nonlocal in_ul, in_ol
-        if in_ul:
-            out.append("</ul>")
-            in_ul = False
-        if in_ol:
-            out.append("</ol>")
-            in_ol = False
-
-    for line in lines:
-        stripped = line.rstrip()
-        if stripped.strip().startswith("```"):
-            if in_code:
-                out.append("</code></pre>")
-            else:
-                close_lists()
-                out.append("<pre><code>")
-            in_code = not in_code
-            continue
-        if in_code:
-            out.append(html.escape(stripped))
-            continue
-        if not stripped.strip():
-            close_lists()
-            continue
-        if stripped.strip() in {"---", "***", "___"}:
-            close_lists()
-            out.append("<hr />")
-            continue
-        heading = re.match(r"^(#{1,6})\s+(.*)$", stripped)
-        if heading:
-            close_lists()
-            level = len(heading.group(1))
-            out.append(f"<h{level}>{_format_setup_inline(heading.group(2))}</h{level}>")
-            continue
-        unordered = re.match(r"^\s*[-*]\s+(.*)$", stripped)
-        if unordered:
-            if not in_ul:
-                close_lists()
-                out.append("<ul>")
-                in_ul = True
-            out.append(f"<li>{_format_setup_inline(unordered.group(1))}</li>")
-            continue
-        ordered = re.match(r"^\s*\d+\.\s+(.*)$", stripped)
-        if ordered:
-            if not in_ol:
-                close_lists()
-                out.append("<ol>")
-                in_ol = True
-            out.append(f"<li>{_format_setup_inline(ordered.group(1))}</li>")
-            continue
-        close_lists()
-        out.append(f"<p>{_format_setup_inline(stripped)}</p>")
-
-    close_lists()
-    if in_code:
-        out.append("</code></pre>")
-    return "\n".join(out)
+DOC_MARKDOWN_RENDERER = _build_doc_markdown_renderer()
 
 
 def _corsify(response):
@@ -513,7 +438,7 @@ def _serve_markdown_doc(path: Path, title: str) -> Response:
         return _corsify(jsonify({"error": f"{path.name} not found at {path}"})), 500
     markdown_text = path.read_text(encoding="utf-8")
     try:
-        body = _render_markdown_html(markdown_text)
+        body = DOC_MARKDOWN_RENDERER.render(markdown_text)
     except Exception:
         body = f"<pre>{html.escape(markdown_text)}</pre>"
     return render_template("docs.html", title=title, body=body)
@@ -521,6 +446,7 @@ def _serve_markdown_doc(path: Path, title: str) -> Response:
 
 DOC_ROUTES = {
     "setup": (SETUP_PATH, "bcfeed setup"),
+    "setup-imap": (IMAP_SETUP_PATH, "bcfeed imap setup"),
     "setup-gmail": (GMAIL_SETUP_PATH, "bcfeed gmail setup"),
     "readme": (README_PATH, "bcfeed README"),
 }
@@ -535,6 +461,12 @@ def setup_doc():
 @app.route("/setup-gmail", methods=["GET"])
 def setup_gmail_doc():
     path, title = DOC_ROUTES["setup-gmail"]
+    return _serve_markdown_doc(path, title)
+
+
+@app.route("/setup-imap", methods=["GET"])
+def setup_imap_doc():
+    path, title = DOC_ROUTES["setup-imap"]
     return _serve_markdown_doc(path, title)
 
 

@@ -37,6 +37,49 @@
     p { margin: 12px 0; }
     ul, ol { margin: 10px 0 16px 22px; }
     li { margin: 6px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 18px;
+      overflow: hidden;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      vertical-align: top;
+    }
+    th {
+      background: rgba(255,255,255,0.06);
+      font-weight: 600;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    details {
+      margin: 14px 0;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+    }
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: #f5f7ff;
+    }
+    details > :not(summary) {
+      margin-top: 12px;
+    }
+    blockquote {
+      margin: 14px 0;
+      padding: 10px 14px;
+      border-left: 3px solid #1f7aff;
+      background: rgba(31,122,255,0.08);
+      color: #dbe5ff;
+    }
     code {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       background: rgba(255,255,255,0.08);

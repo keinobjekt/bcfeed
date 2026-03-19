@@ -23,7 +23,7 @@ class ImapConfig:
     host: str
     port: int = 993
     username: str = ""
-    password: str = ""  # App-specific password recommended
+    password: str = ""
     use_ssl: bool = True
     folder: str = ""
 

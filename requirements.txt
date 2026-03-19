@@ -4,5 +4,6 @@ requests
 bs4
 flask
 furl
-requests
 keyring
+markdown-it-py
+linkify-it-py
