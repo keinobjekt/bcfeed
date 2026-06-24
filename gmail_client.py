@@ -1,21 +1,29 @@
 import pickle
-import os
 import sys
 import base64
 import json
 import quopri
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from furl import furl
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.auth.exceptions import RefreshError
-from bs4 import BeautifulSoup
-import re
+from google.oauth2.credentials import Credentials
 
-from paths import get_data_dir, GMAIL_CREDENTIALS_FILE, GMAIL_TOKEN_FILE
+from credential_store import (
+    CredentialStoreError,
+    clear_gmail_client_config as clear_stored_gmail_client_config,
+    clear_gmail_token as clear_stored_gmail_token,
+    get_gmail_client_config_json,
+    get_gmail_token_json,
+    has_gmail_client_config as has_stored_gmail_client_config,
+    has_gmail_token as has_stored_gmail_token,
+    save_gmail_client_config_json,
+    save_gmail_token_json,
+)
+from paths import CREDENTIALS_PATH, GMAIL_CREDENTIALS_FILE, TOKEN_PATH
 
 
 class GmailAuthError(Exception):
@@ -23,21 +31,23 @@ class GmailAuthError(Exception):
 
 
 def _clear_token() -> None:
-    """Remove saved token file to force a new auth flow next run."""
+    """Remove saved token to force a new auth flow next run."""
     try:
-        token_path = get_data_dir() / GMAIL_TOKEN_FILE
-        if token_path.exists():
-            token_path.unlink()
+        clear_stored_gmail_token()
+    except Exception:
+        pass
+    try:
+        if TOKEN_PATH.exists():
+            TOKEN_PATH.unlink()
     except Exception:
         pass
 
 def _find_credentials_file() -> Path | None:
     """
-    Look for credentials file in writable data dir, bundled resources, or CWD.
+    Look for a legacy credentials file in the app data dir, bundled resources, or CWD.
     """
-    data_dir = get_data_dir()
     candidates = [
-        data_dir / GMAIL_CREDENTIALS_FILE,
+        CREDENTIALS_PATH,
     ]
     bundle_root = getattr(sys, "_MEIPASS", None)
     if bundle_root:
@@ -47,6 +57,124 @@ def _find_credentials_file() -> Path | None:
         if path.exists():
             return path
     return None
+
+
+def gmail_credentials_configured() -> bool:
+    try:
+        return has_stored_gmail_client_config() or _find_credentials_file() is not None
+    except CredentialStoreError:
+        return _find_credentials_file() is not None
+
+
+def gmail_token_available() -> bool:
+    try:
+        return has_stored_gmail_token() or TOKEN_PATH.exists()
+    except CredentialStoreError:
+        return TOKEN_PATH.exists()
+
+
+def clear_gmail_credentials(*, clear_client_config: bool = True) -> None:
+    """Remove stored Gmail credentials and app-managed legacy files."""
+    errors: list[Exception] = []
+
+    try:
+        clear_stored_gmail_token()
+    except Exception as exc:
+        errors.append(exc)
+
+    if clear_client_config:
+        try:
+            clear_stored_gmail_client_config()
+        except Exception as exc:
+            errors.append(exc)
+
+    for path in (TOKEN_PATH, CREDENTIALS_PATH):
+        try:
+            if path.exists():
+                path.unlink()
+        except Exception as exc:
+            errors.append(exc)
+
+    if errors:
+        raise GmailAuthError(str(errors[0]))
+
+
+def _load_stored_token() -> Credentials | None:
+    token_json = get_gmail_token_json()
+    if not token_json:
+        return None
+    try:
+        payload = json.loads(token_json)
+        if not isinstance(payload, dict):
+            raise ValueError("Gmail token JSON must contain an object")
+        return Credentials.from_authorized_user_info(payload)
+    except Exception as exc:
+        _clear_token()
+        raise GmailAuthError("Stored Gmail token is invalid. Reload credentials in the settings panel.") from exc
+
+
+def _persist_token(creds: Credentials) -> None:
+    try:
+        save_gmail_token_json(creds.to_json())
+    except (CredentialStoreError, ValueError) as exc:
+        raise GmailAuthError(str(exc)) from exc
+    try:
+        if TOKEN_PATH.exists():
+            TOKEN_PATH.unlink()
+    except Exception:
+        pass
+
+
+def _load_legacy_token() -> Credentials | None:
+    if not TOKEN_PATH.exists():
+        return None
+
+    try:
+        with open(TOKEN_PATH, "rb") as token:
+            creds = pickle.load(token)
+        _persist_token(creds)
+        try:
+            TOKEN_PATH.unlink()
+        except Exception:
+            pass
+        return creds
+    except GmailAuthError:
+        raise
+    except Exception as exc:
+        raise GmailAuthError("Saved Gmail token is unreadable. Reload credentials in the settings panel.") from exc
+
+
+def _load_client_config() -> dict:
+    raw_json = get_gmail_client_config_json()
+    if raw_json:
+        try:
+            payload = json.loads(raw_json)
+            if isinstance(payload, dict):
+                return payload
+        except Exception as exc:
+            raise GmailAuthError("Stored Gmail credentials are invalid. Reload credentials in the settings panel.") from exc
+
+    cred_file = _find_credentials_file()
+    if not cred_file:
+        raise FileNotFoundError(
+            f"Could not find {GMAIL_CREDENTIALS_FILE}. Reload credentials file in the settings panel to regenerate it."
+        )
+
+    try:
+        raw_json = cred_file.read_text(encoding="utf-8")
+        payload = save_gmail_client_config_json(raw_json)
+    except (CredentialStoreError, ValueError) as exc:
+        raise GmailAuthError(str(exc)) from exc
+    except Exception as exc:
+        raise GmailAuthError("Gmail credentials file could not be read. Reload it in the settings panel.") from exc
+
+    if cred_file == CREDENTIALS_PATH:
+        try:
+            cred_file.unlink()
+        except Exception:
+            pass
+
+    return payload
 
 
 # ------------------------------------------------------------------------ 
@@ -89,14 +217,7 @@ def gmail_authenticate():
     SCOPES = ['https://mail.google.com/'] # Request all access (permission to read/send/receive emails, manage the inbox, and more)
 
     creds = None
-    data_dir = get_data_dir()
-    token_path = data_dir / GMAIL_TOKEN_FILE
-
-    # the file token.pickle stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first time
-    if token_path.exists():
-        with open(token_path, "rb") as token:
-            creds = pickle.load(token)
+    creds = _load_stored_token() or _load_legacy_token()
     # if there are no (valid) credentials availablle, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -109,15 +230,10 @@ def gmail_authenticate():
                 _clear_token()
                 raise GmailAuthError(f"Gmail refresh failed: {exc}") from exc
         else:
-            cred_file = _find_credentials_file()
-            if not cred_file:
-                raise FileNotFoundError(f"Could not find {GMAIL_CREDENTIALS_FILE}. Reload credentials file in the settings panel to regenerate it.")
-            flow = InstalledAppFlow.from_client_secrets_file(str(cred_file), SCOPES)
+            client_config = _load_client_config()
+            flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
             creds = flow.run_local_server(port=0)
-        # save the credentials for the next run
-        data_dir.mkdir(parents=True, exist_ok=True)
-        with open(token_path, "wb") as token:
-            pickle.dump(creds, token)
+        _persist_token(creds)
     try:
         return build('gmail', 'v1', credentials=creds)
     except HttpError as exc:
@@ -195,101 +311,3 @@ def get_messages(service, ids, format, batch_size, log=print):
             idx += 1
 
     return emails
-
-
-
-# ------------------------------------------------------------------------ 
-# Scrape Bandcamp URL and light metadata from one email
-def scrape_info_from_email(email_text, subject=None):
-    img_url = None
-    release_url = None
-    is_track = None
-    artist_name = None
-    release_title = None
-    page_name = None
-
-    s = email_text
-    try:
-        s = s.decode()
-    except:
-        s = str(s)
-
-    # Only accept messages whose subject starts with the expected release prefix.
-    if subject and not subject.lower().startswith("new release from"):
-        return None, None, None, None, None, None
-    
-    # release url
-    soup = BeautifulSoup(email_text, "html.parser") if email_text else None
-    release_url = None
-
-    def _find_bandcamp_release_url() -> str | None:
-        for a in soup.find_all("a", href=True):
-            href = a["href"]
-            parsed = furl(href)
-            path = str(parsed.path).lower()
-            # Accept custom domains as long as the path looks like a release page.
-            if "/album/" in path or "/track/" in path:
-                return parsed.remove(args=True, fragment=True).url
-        return None
-    
-    release_url = _find_bandcamp_release_url()
-
-    if release_url == None:
-        return None, None, None, None, None, None
-
-    # track (vs release) flag
-    release_path = str(furl(release_url).path).lower()
-    is_track = "/track/" in release_path
-
-
-    # attempt to scrape artist/release/page from the email itself
-    # formats:
-    # "page_name just released release_title by artist_name, check it out here"
-    # "artist_name just released release_title, check it out here"
-    if soup:
-        
-        full_text = soup.get_text(" ", strip=True)
-        # Remove the leading greeting which always starts with "Greetings <username>, "
-        if full_text.lower().startswith("greetings "):
-            # drop first sentence up to first comma
-            if "," in full_text:
-                full_text = full_text.split(",", 1)[1].strip()
-        # Strip the trailing call-to-action
-        full_text = re.split(r",\s*check it out here", full_text, flags=re.IGNORECASE)[0].strip()
-
-        # Expecting one of:
-        # 1) "<page_name> just released <release_title>"
-        # 2) "<page_name> just released <release_title> by <artist_name>"
-        # or with "just announced" instead of "just released"
-        release_phrase = r"just\s+(?:released|announced)"
-        release_match = re.search(release_phrase, full_text, flags=re.IGNORECASE)
-        after = ""
-        if release_match:
-            before, after = re.split(release_phrase, full_text, maxsplit=1, flags=re.IGNORECASE)
-            page_name = (page_name or before).strip() if before else page_name
-            after = after.strip()
-
-        italic_texts = []
-        for tag in soup.find_all(["span", "i", "em"]):
-            style = tag.get("style", "").lower()
-            if tag.name in {"i", "em"} or "italic" in style:
-                text = tag.get_text(" ", strip=True)
-                if text:
-                    italic_texts.append(text)
-
-        if italic_texts:
-            if after:
-                for text in italic_texts:
-                    if text in after:
-                        release_title = text
-                        break
-            if not release_title:
-                release_title = italic_texts[0]
-
-        if after and release_title:
-            m = re.search(re.escape(release_title) + r"\s+by\s+(.+)$", after, flags=re.IGNORECASE)
-            if m:
-                artist_name = artist_name or m.group(1).strip()
-
-
-    return img_url, release_url, is_track, artist_name, release_title, page_name

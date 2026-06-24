@@ -7,38 +7,52 @@ from __future__ import annotations
 import datetime
 import html
 import json
-import re
+import os
 import socket
 import threading
 from pathlib import Path
 
 import requests
 from flask import Flask, jsonify, request, Response, stream_with_context, send_file, render_template
+from markdown_it import MarkdownIt
 from queue import SimpleQueue
 from werkzeug.serving import make_server, WSGIRequestHandler
 
 from bandcamp import extract_bc_meta, extract_bandcamp_description, build_embed_url
+from credential_store import (
+    CredentialStoreError,
+    get_imap_password,
+    has_imap_password,
+    save_gmail_client_config_json,
+)
 from util import parse_date
 from paths import (
-    DATA_DIR,
     VIEWED_PATH,
     STARRED_PATH,
     RELEASE_CACHE_PATH,
     EMPTY_DATES_PATH,
     SCRAPE_STATUS_PATH,
     EMBED_CACHE_PATH,
-    TOKEN_PATH,
-    CREDENTIALS_PATH,
     DASHBOARD_PATH,
     DASHBOARD_CSS_PATH,
     DASHBOARD_JS_PATH,
     README_PATH,
     SETUP_PATH,
+    IMAP_SETUP_PATH,
     GMAIL_SETUP_PATH,
 )
 from session_store import scrape_status_for_range, get_full_release_cache
 from pipeline import populate_release_cache, MaxResultsExceeded
-from gmail import _find_credentials_file, GmailAuthError, gmail_authenticate
+from gmail_client import (
+    GmailAuthError,
+    clear_gmail_credentials,
+    gmail_authenticate,
+    gmail_credentials_configured,
+    gmail_token_available,
+)
+from provider_factory import load_provider_config, save_provider_config, get_current_provider_type
+from email_provider import AuthenticationError, ProviderError
+from imap_client import ImapClient, ImapConfig, ImapFolder
 
 app = Flask(__name__)
 
@@ -46,103 +60,28 @@ POPULATE_LOCK = threading.Lock()
 GMAIL_MAX_RESULTS_HARD = 2000
 DOC_LINK_MAP = {
     "SETUP.md": "setup",
+    "IMAP_SETUP.md": "setup-imap",
     "GMAIL_SETUP.md": "setup-gmail",
     "README.md": "readme",
 }
+IMAP_DISCOVERY_SEARCH_CRITERIA = ["FROM", '"noreply@bandcamp.com"', "SUBJECT", '"New release from"']
 
 
-def _rewrite_doc_link(match: re.Match) -> str:
-    label = match.group(1)
-    href = match.group(2)
-    href = DOC_LINK_MAP.get(href, href)
-    return f'<a href="{href}" target="_blank" rel="noopener">{label}</a>'
+def _build_doc_markdown_renderer() -> MarkdownIt:
+    md = MarkdownIt("gfm-like", {"html": True})
+
+    def render_link_open(self, tokens, idx, options, env):
+        href = tokens[idx].attrGet("href") or ""
+        tokens[idx].attrSet("href", DOC_LINK_MAP.get(href, href))
+        tokens[idx].attrSet("target", "_blank")
+        tokens[idx].attrSet("rel", "noopener")
+        return self.renderToken(tokens, idx, options, env)
+
+    md.add_render_rule("link_open", render_link_open)
+    return md
 
 
-def _format_setup_inline(text: str) -> str:
-    parts = text.split("`")
-    out = []
-    for idx, part in enumerate(parts):
-        escaped = html.escape(part)
-        if idx % 2 == 1:
-            out.append(f"<code>{escaped}</code>")
-        else:
-            escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
-            escaped = re.sub(r"\*(.+?)\*", r"<em>\1</em>", escaped)
-            escaped = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _rewrite_doc_link, escaped)
-            escaped = re.sub(
-                r"(https?://[\w./?&#=%:+~-]+)",
-                r'<a href="\1" target="_blank" rel="noopener">\1</a>',
-                escaped,
-            )
-            out.append(escaped)
-    return "".join(out)
-
-
-def _render_markdown_html(markdown_text: str) -> str:
-    lines = markdown_text.splitlines()
-    out = []
-    in_ul = False
-    in_ol = False
-    in_code = False
-
-    def close_lists():
-        nonlocal in_ul, in_ol
-        if in_ul:
-            out.append("</ul>")
-            in_ul = False
-        if in_ol:
-            out.append("</ol>")
-            in_ol = False
-
-    for line in lines:
-        stripped = line.rstrip()
-        if stripped.strip().startswith("```"):
-            if in_code:
-                out.append("</code></pre>")
-            else:
-                close_lists()
-                out.append("<pre><code>")
-            in_code = not in_code
-            continue
-        if in_code:
-            out.append(html.escape(stripped))
-            continue
-        if not stripped.strip():
-            close_lists()
-            continue
-        if stripped.strip() in {"---", "***", "___"}:
-            close_lists()
-            out.append("<hr />")
-            continue
-        heading = re.match(r"^(#{1,6})\s+(.*)$", stripped)
-        if heading:
-            close_lists()
-            level = len(heading.group(1))
-            out.append(f"<h{level}>{_format_setup_inline(heading.group(2))}</h{level}>")
-            continue
-        unordered = re.match(r"^\s*[-*]\s+(.*)$", stripped)
-        if unordered:
-            if not in_ul:
-                close_lists()
-                out.append("<ul>")
-                in_ul = True
-            out.append(f"<li>{_format_setup_inline(unordered.group(1))}</li>")
-            continue
-        ordered = re.match(r"^\s*\d+\.\s+(.*)$", stripped)
-        if ordered:
-            if not in_ol:
-                close_lists()
-                out.append("<ol>")
-                in_ol = True
-            out.append(f"<li>{_format_setup_inline(ordered.group(1))}</li>")
-            continue
-        close_lists()
-        out.append(f"<p>{_format_setup_inline(stripped)}</p>")
-
-    close_lists()
-    if in_code:
-        out.append("</code></pre>")
-    return "\n".join(out)
+DOC_MARKDOWN_RENDERER = _build_doc_markdown_renderer()
 
 
 def _corsify(response):
@@ -169,7 +108,6 @@ def _save_set(path: Path, items: set[str]) -> None:
     try:
         tmp.replace(path)
     except FileNotFoundError:
-        # If the temp file vanished between write and replace, fall back to writing directly.
         path.write_text(json.dumps(sorted(items)), encoding="utf-8")
 
 
@@ -233,6 +171,7 @@ def health():
     if request.method == "OPTIONS":
         return _corsify(app.response_class(status=204))
     return _corsify(jsonify({"ok": True}))
+
 
 # Suppress noisy logging for health checks
 class QuietHealthHandler(WSGIRequestHandler):
@@ -336,13 +275,135 @@ def starred_state():
     return _corsify(jsonify({"ok": True}))
 
 
+def _has_credentials_for_provider() -> bool:
+    """Check if credentials are configured for the current provider type."""
+    provider_type = get_current_provider_type()
+
+    if provider_type == "gmail":
+        return gmail_credentials_configured() and gmail_token_available()
+    elif provider_type == "imap":
+        config = load_provider_config()
+        imap_cfg = config.get("imap_config", {})
+        try:
+            has_password = has_imap_password() or bool(imap_cfg.get("password", ""))
+        except CredentialStoreError:
+            has_password = bool(imap_cfg.get("password", ""))
+        return bool(
+            imap_cfg.get("host", "").strip()
+            and imap_cfg.get("username", "").strip()
+            and has_password
+            and imap_cfg.get("folder", "").strip()
+        )
+    return False
+
+
+def _coerce_imap_port(value) -> int:
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        return 993
+    return port if port > 0 else 993
+
+
+def _coerce_imap_use_ssl(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return True
+    return str(value).strip().lower() not in {"false", "0", "no", "off", "none"}
+
+
+def _imap_connection_signature(imap: dict | None) -> tuple[str, int, str, bool]:
+    imap = imap or {}
+    return (
+        str(imap.get("host", "")).strip(),
+        _coerce_imap_port(imap.get("port", 993)),
+        str(imap.get("username", "")).strip(),
+        _coerce_imap_use_ssl(imap.get("use_ssl", True)),
+    )
+
+
+def _build_imap_config(imap: dict | None, existing: dict | None = None) -> dict:
+    existing = existing or {}
+    imap = imap or {}
+    config = {
+        "host": str(imap.get("host", existing.get("host", "")) or "").strip(),
+        "port": _coerce_imap_port(imap.get("port", existing.get("port", 993))),
+        "username": str(imap.get("username", existing.get("username", "")) or "").strip(),
+        "password": str(imap.get("password", "") or ""),
+        "folder": str(imap.get("folder", existing.get("folder", "")) or "").strip(),
+        "use_ssl": _coerce_imap_use_ssl(imap.get("use_ssl", existing.get("use_ssl", True))),
+    }
+    if not config["password"] and _imap_connection_signature(config) == _imap_connection_signature(existing):
+        try:
+            config["password"] = get_imap_password()
+        except CredentialStoreError:
+            config["password"] = str(existing.get("password", "") or "")
+    return config
+
+
+def _open_imap_client(imap: dict, *, select_folder: bool = False) -> ImapClient:
+    client = ImapClient(ImapConfig(**imap))
+    client.authenticate(select_folder=select_folder)
+    return client
+
+
+def _imap_folder_rank(folder: ImapFolder) -> tuple[int, str]:
+    flags = {flag.lower() for flag in folder.flags}
+    name = folder.name.lower()
+    score = 100
+
+    if "\\all" in flags:
+        score = 0
+    elif "\\inbox" in flags or name == "inbox":
+        score = 10
+    elif "\\archive" in flags or "archive" in name or "all mail" in name:
+        score = 20
+    elif "\\junk" in flags or "\\trash" in flags or "\\sent" in flags or "\\drafts" in flags:
+        score += 500
+    elif any(keyword in name for keyword in ("spam", "junk", "trash", "deleted", "sent", "draft")):
+        score += 500
+
+    if not folder.selectable:
+        score += 1000
+
+    return score, name
+
+
+def _discover_imap_folders(client: ImapClient) -> tuple[list[str], str | None]:
+    folders = client.list_folders()
+    ordered = sorted(folders, key=_imap_folder_rank)
+    selectable = [folder.name for folder in ordered if folder.selectable]
+    recommended_folder: str | None = None
+
+    probe_candidates = [
+        folder for folder in ordered
+        if folder.selectable and _imap_folder_rank(folder)[0] < 500
+    ][:5]
+    for folder in probe_candidates:
+        try:
+            client.select_folder(folder.name)
+            if client.uid_search(IMAP_DISCOVERY_SEARCH_CRITERIA):
+                recommended_folder = folder.name
+                break
+        except (AuthenticationError, ProviderError):
+            continue
+
+    if recommended_folder is None:
+        recommended_folder = next(iter(selectable), None)
+
+    return selectable, recommended_folder
+
+
 @app.route("/config.json", methods=["GET"])
 def config_json():
     embed_proxy_url = request.host_url.rstrip("/") + "/embed-meta"
+    has_credentials = _has_credentials_for_provider()
     payload = {
         "title": "bcfeed",
         "embed_proxy_url": embed_proxy_url,
-        "has_token": TOKEN_PATH.exists(),
+        "has_token": gmail_token_available(),
+        "has_credentials": has_credentials,
         "default_theme": "light",
         "clear_status_on_load": False,
         "show_dev_settings": False,
@@ -377,7 +438,7 @@ def _serve_markdown_doc(path: Path, title: str) -> Response:
         return _corsify(jsonify({"error": f"{path.name} not found at {path}"})), 500
     markdown_text = path.read_text(encoding="utf-8")
     try:
-        body = _render_markdown_html(markdown_text)
+        body = DOC_MARKDOWN_RENDERER.render(markdown_text)
     except Exception:
         body = f"<pre>{html.escape(markdown_text)}</pre>"
     return render_template("docs.html", title=title, body=body)
@@ -385,6 +446,7 @@ def _serve_markdown_doc(path: Path, title: str) -> Response:
 
 DOC_ROUTES = {
     "setup": (SETUP_PATH, "bcfeed setup"),
+    "setup-imap": (IMAP_SETUP_PATH, "bcfeed imap setup"),
     "setup-gmail": (GMAIL_SETUP_PATH, "bcfeed gmail setup"),
     "readme": (README_PATH, "bcfeed README"),
 }
@@ -399,6 +461,12 @@ def setup_doc():
 @app.route("/setup-gmail", methods=["GET"])
 def setup_gmail_doc():
     path, title = DOC_ROUTES["setup-gmail"]
+    return _serve_markdown_doc(path, title)
+
+
+@app.route("/setup-imap", methods=["GET"])
+def setup_imap_doc():
+    path, title = DOC_ROUTES["setup-imap"]
     return _serve_markdown_doc(path, title)
 
 
@@ -508,9 +576,7 @@ def clear_credentials():
         app.logger.info(msg)
 
     try:
-        if TOKEN_PATH.exists():
-            TOKEN_PATH.unlink()
-            log("Removed saved Gmail token.")
+        clear_gmail_credentials()
         log("Credentials cleared.")
         return _corsify(jsonify({"ok": True, "logs": logs}))
     except Exception as exc:
@@ -534,17 +600,23 @@ def load_credentials():
         file = request.files["file"]
         if not file.filename:
             return _corsify(jsonify({"error": "Empty filename"})), 400
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        tmp = CREDENTIALS_PATH.with_suffix(".tmp")
-        file.save(tmp)
-        tmp.replace(CREDENTIALS_PATH)
-        if TOKEN_PATH.exists():
-            TOKEN_PATH.unlink()
-            log("Removed existing Gmail token.")
-        log("Saved credentials file. Authenticating…")
+        raw_json = file.read()
+        if not raw_json:
+            return _corsify(jsonify({"error": "Uploaded file was empty"})), 400
+        save_gmail_client_config_json(raw_json.decode("utf-8"))
+        clear_gmail_credentials(clear_client_config=False)
+        log("Saved Gmail credentials to secure storage. Authenticating…")
         gmail_authenticate()
         log("Credentials uploaded and authenticated.")
         return _corsify(jsonify({"ok": True, "logs": logs}))
+    except UnicodeDecodeError:
+        return _corsify(jsonify({"error": "Credentials file must be valid UTF-8 JSON", "logs": logs})), 400
+    except ValueError as exc:
+        log(f"ERROR: {exc}")
+        return _corsify(jsonify({"error": str(exc), "logs": logs})), 400
+    except CredentialStoreError as exc:
+        log(f"ERROR: {exc}")
+        return _corsify(jsonify({"error": str(exc), "logs": logs})), 500
     except Exception as exc:
         log(f"ERROR: {exc}")
         return _corsify(jsonify({"error": str(exc), "logs": logs})), 500
@@ -557,6 +629,7 @@ def populate_range_stream():
     start_arg = request.args.get("start") or request.args.get("from")
     end_arg = request.args.get("end") or start_arg
     max_results = int(request.args.get("max_results") or GMAIL_MAX_RESULTS_HARD)
+
     def error_stream(msg: str):
         def gen():
             yield f"event: error\ndata: {msg}\n\n"
@@ -564,7 +637,6 @@ def populate_range_stream():
             "Access-Control-Allow-Origin": "*",
             "Cache-Control": "no-cache",
         }
-        # Also emit a one-line log-friendly version for browser status box
         app.logger.error(msg)
         return Response(stream_with_context(gen()), mimetype="text/event-stream", headers=headers)
 
@@ -574,10 +646,18 @@ def populate_range_stream():
     end = parse_date(end_arg, allow_none=True)
     if not start or not end or start > end:
         return error_stream("Invalid start/end")
-    if not _find_credentials_file():
-        return error_stream("Credentials not found. Reload credentials in the settings panel.")
-    if not TOKEN_PATH.exists():
-        return error_stream("Gmail token missing. Reload credentials in the settings panel to re-authenticate.")
+
+    # Check credentials based on provider type
+    provider_type = get_current_provider_type()
+    if provider_type == "gmail":
+        if not gmail_credentials_configured():
+            return error_stream("Gmail credentials not found. Reload credentials in the settings panel.")
+        if not gmail_token_available():
+            return error_stream("Gmail token missing. Reload credentials in the settings panel to re-authenticate.")
+    elif provider_type == "imap":
+        # Check IMAP credentials
+        if not _has_credentials_for_provider():
+            return error_stream("IMAP credentials not configured. Please configure IMAP settings (host, username, password, folder) in the settings panel.")
 
     if not POPULATE_LOCK.acquire(blocking=False):
         return error_stream("Another populate is already running")
@@ -602,6 +682,10 @@ def populate_range_stream():
                 q.put(f"ERROR: {exc}")
             except MaxResultsExceeded as exc:
                 q.put(f"Maximum results reached ({exc.found}/{exc.max_results}).")
+            except (AuthenticationError, ProviderError) as exc:
+                q.put(f"ERROR: {exc}")
+            except Exception as exc:
+                q.put(f"ERROR: Unexpected error: {exc}")
             finally:
                 q.put(None)
 
@@ -624,3 +708,115 @@ def populate_range_stream():
         "Cache-Control": "no-cache",
     }
     return Response(stream_with_context(event_stream()), mimetype="text/event-stream", headers=headers)
+
+
+# ---------------------------------------------------------------------------
+# Provider configuration endpoints
+
+
+@app.route("/imap/discover", methods=["POST", "OPTIONS"])
+def imap_discover():
+    """Authenticate with IMAP and return available folders for selection."""
+    if request.method == "OPTIONS":
+        return _corsify(app.response_class(status=204))
+
+    try:
+        data = request.get_json(silent=True) or {}
+        saved_config = load_provider_config().get("imap_config", {})
+        imap = _build_imap_config(data.get("imap_config"), saved_config)
+
+        if not imap["host"]:
+            return _corsify(jsonify({"error": "IMAP host is required."})), 400
+        if not imap["username"]:
+            return _corsify(jsonify({"error": "IMAP username is required."})), 400
+        if not imap["password"]:
+            return _corsify(jsonify({"error": "Enter your IMAP password to load folders."})), 400
+
+        client = None
+        try:
+            client = _open_imap_client(imap, select_folder=False)
+            folders, recommended_folder = _discover_imap_folders(client)
+        finally:
+            if client is not None:
+                client.close()
+
+        return _corsify(jsonify({
+            "folders": folders,
+            "recommended_folder": recommended_folder,
+        }))
+    except CredentialStoreError as exc:
+        return _corsify(jsonify({"error": str(exc)})), 500
+    except (AuthenticationError, ProviderError, ValueError) as exc:
+        return _corsify(jsonify({"error": str(exc)})), 400
+    except Exception as exc:
+        return _corsify(jsonify({"error": f"Failed to load IMAP folders: {exc}"})), 500
+
+
+@app.route("/provider-config", methods=["GET", "POST", "OPTIONS"])
+def provider_config():
+    """Get or update the email provider configuration."""
+    if request.method == "OPTIONS":
+        return _corsify(app.response_class(status=204))
+
+    if request.method == "GET":
+        config = load_provider_config()
+        # Don't expose password in GET response
+        imap_cfg = config.get("imap_config", {})
+        try:
+            has_password = has_imap_password() or bool(imap_cfg.get("password", ""))
+        except CredentialStoreError:
+            has_password = bool(imap_cfg.get("password", ""))
+        safe_config = {
+            "provider": config.get("provider", "gmail"),
+            "imap_config": {
+                "host": imap_cfg.get("host", ""),
+                "port": imap_cfg.get("port", 993),
+                "username": imap_cfg.get("username", ""),
+                "folder": imap_cfg.get("folder", ""),
+                "use_ssl": imap_cfg.get("use_ssl", True),
+                "has_password": has_password,
+            },
+            "has_gmail_credentials": gmail_credentials_configured(),
+        }
+        return _corsify(jsonify(safe_config))
+
+    # POST: Save config
+    try:
+        data = request.get_json(silent=True) or {}
+        config = load_provider_config()
+
+        if "provider" in data:
+            config["provider"] = data["provider"]
+
+        if "imap_config" in data:
+            existing_imap = config.get("imap_config", {})
+            imap = _build_imap_config(data["imap_config"], existing_imap)
+            if not imap["host"]:
+                raise ValueError("IMAP host is required.")
+            if not imap["username"]:
+                raise ValueError("IMAP username is required.")
+            if not imap["password"]:
+                raise ValueError("IMAP password is required.")
+            if not imap["folder"]:
+                raise ValueError("Choose an IMAP folder to scan before saving.")
+
+            client = None
+            try:
+                client = _open_imap_client(imap, select_folder=True)
+            finally:
+                if client is not None:
+                    client.close()
+
+            config["imap_config"] = imap
+
+        save_provider_config(config)
+        return _corsify(jsonify({"ok": True}))
+    except CredentialStoreError as exc:
+        return _corsify(jsonify({"error": str(exc)})), 500
+    except (AuthenticationError, ProviderError, ValueError) as exc:
+        return _corsify(jsonify({"error": str(exc)})), 400
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5050))
+    app.run(host="0.0.0.0", port=port, threaded=True)
